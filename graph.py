@@ -1,5 +1,10 @@
 from numpy.random import uniform
-from numpy import zeros
+from numpy import zeros, ndarray, unique
+import os
+from pandas import DataFrame
+import sys
+
+from min_bisection import input_schema
 
 
 class GraphException(Exception):
@@ -51,7 +56,27 @@ def two_clustered_graph(n, p, q):
         return a
 
 
+def save_graph(a, fldr):
+    """ Take an adjacency matrix and save it to a csv
+
+    :param a: an adjacency matrix
+    :param fldr: where to save the matrix
+    :return:
+    """
+    verify(isinstance(a, ndarray), 'the matrix should be a numpy ndarray')
+    verify(a.shape[0] == a.shape[1], 'the matrix should be square')
+    verify(set(unique(a)) == {0, 1}, 'values can only be 0 and 1')
+    verify(a.trace() == 0, 'no values should exist on diagonal')
+    verify((a == a.T).all(), 'transpose should be equal')
+    verify(os.path.isdir(fldr), 'fldr should be an existing directory')
+
+    ipt = input_schema.TicDat()
+    ipt.a = DataFrame(a, columns=[str(i) for i in range(a.shape[0])], dtype=int)
+    ipt.parameters["Cut Proportion"] = .1
+
+    input_schema.csv.write_directory(ipt, fldr, allow_overwrite=True)
 
 
-
-
+if __name__ == '__main__':
+    a = two_clustered_graph(int(sys.argv[1]), float(sys.argv[2]), float(sys.argv[3]))
+    save_graph(a, sys.argv[4])
