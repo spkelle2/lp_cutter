@@ -28,19 +28,22 @@ solution_schema = TicDatFactory(
 
 
 def data_integrity_checks(dat):
-    """Check that the data for our min bisection problem is "good"
+    """Check that the data for our min bisection problem is "good". If so,
+    return the number of nodes in our graph
 
     :param dat: the ticdat to check
-    :return:
+    :return n: the number of nodes in our graph
     """
     assert input_schema.good_tic_dat_object(dat)
     assert not input_schema.find_data_type_failures(dat)
     assert not input_schema.find_data_row_failures(dat)
 
-    indices = range(max(v2 for (v1, v2) in dat.a) + 1)
+    n = max(v2 for (v1, v2) in dat.a) + 1
+    indices = range(n)
     missing_pairs = [(i, j) for i in indices[:-1] for j in indices[i+1:] if
                      dat.a.get((i, j)) is None]
     assert not missing_pairs, f'Provide values for these vertex pairs: {missing_pairs}'
+    return n
 
 
 def solve(dat):
@@ -51,14 +54,36 @@ def solve(dat):
     :param dat: a ticdat representing our input data for the min bisection model
     :return:
     """
-    data_integrity_checks(dat)
+    n = data_integrity_checks(dat)
 
     mdl = gu.Model("min bisection")
 
-    x = {(v1, v2): mdl.addVar(vtype='B', name=(v1, v2)) for (v1, v2) in dat.a}
+    x = {(i, j): mdl.addVar(vtype='B', name=(i, j)) for (i, j) in dat.a}
 
-    mdl.setObjective(gu.quicksum(f['Exists'] * x[v1, v2] for (v1, v2), f in dat.a),
+    mdl.setObjective(gu.quicksum(f['Exists'] * x[i, j] for (i, j), f in dat.a),
                      sense=gu.GRB.MINIMIZE)
+
+    mdl.addConstr(gu.quicksum(x[i, j] for (i, j) in x) == n**2/4,
+                  name='Equal Partitions')
+
+    #take small number of triangle inequality to begin
+
+    # create initial feasible solution to compare constraints against
+    mdl.optimize()
+    assert mdl.status == gu.GRB.OPTIMAL, 'unconstrained solve should make solution'
+
+    while True:
+        inf = {c: abs(sum(dat.nutrition_quantities[f, c]["Quantity"]*buy[f].x for
+                          f in dat.foods) - nutrition[c].x) for c in dat.categories
+               if not isclose(sum(dat.nutrition_quantities[f, c]["Quantity"]*buy[f].x
+                                  for f in dat.foods), nutrition[c].x)}
+        if not inf:
+            break
+        c = max(inf, key=inf.get)
+        mdl.addConstr(gu.quicksum(dat.nutrition_quantities[f, c]["Quantity"] * buy[f]
+                                  for f in dat.foods) == nutrition[c], name=c)
+        mdl.optimize()
+        assert mdl.status == gu.GRB.OPTIMAL, f"model ended up as: {mdl.status}"
 
 
 if __name__ == '__main__':
