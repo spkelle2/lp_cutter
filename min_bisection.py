@@ -43,14 +43,14 @@ def solve(n, p, q, cut_proportion):
 
     # build our model
     mdl = gu.Model("min bisection")
+    mdl.setParam(gu.GRB.Param.Method, 1)
 
     # variables
     x = {(i, j): mdl.addVar(vtype='B', name=f'{i}_{j}') for i in indices
          for j in indices if i != j}
 
     # objective
-    mdl.setObjective(gu.quicksum(a[i, j] * x[i, j] for i in indices
-                                 for j in indices if i < j),
+    mdl.setObjective(gu.quicksum(a[i, j] * x[i, j] for (i, j) in x if i < j),
                      sense=gu.GRB.MINIMIZE)
 
     # (3) Equal partition constraint
@@ -62,7 +62,7 @@ def solve(n, p, q, cut_proportion):
         mdl.addConstr(x[i, j] <= x[i, k] + x[j, k], name=f'{i}_{j}_{k}_tri1')
     tri1 = tri1[50:]
 
-    # (2) Add randomly 50 of the 2st triangle inequality constraints
+    # (2) Add randomly 50 of the 2nd triangle inequality constraints
     for (i, j, k) in tri2[:50]:
         mdl.addConstr(x[i, j] + x[i, k] + x[j, k] <= 2, name=f'{i}_{j}_{k}_tri2')
     tri2 = tri2[50:]
@@ -73,21 +73,19 @@ def solve(n, p, q, cut_proportion):
     while True:
         # find all constraints that are violated. note any violated constraint
         # has same depth, so don't sweat finding the "most" violated ones
-        inf1 = [(i, j, k) for (i, j, k) in tri1 if x[i, j] > x[i, k] + x[j, k]]
-        inf2 = [(i, j, k) for (i, j, k) in tri2 if x[i, j] + x[i, k] + x[j, k] > 2]
-        if not inf1 or inf2:
+        inf1 = [(i, j, k) for (i, j, k) in tri1 if x[i, j].x > x[i, k].x + x[j, k].x]
+        inf2 = [(i, j, k) for (i, j, k) in tri2 if x[i, j].x + x[i, k].x + x[j, k].x > 2]
+        if not (inf1 or inf2):
             break
 
         # im sure there's a better way to select from our most violated cuts
         # but this is quick and easy for now
         for (i, j, k) in inf1[:cut_size//2]:
-            mdl.addConstr(mdl.addConstr(x[i, j] <= x[i, k] + x[j, k],
-                                        name=f'{i}_{j}_{k}_tri1'))
+            mdl.addConstr(x[i, j] <= x[i, k] + x[j, k], name=f'{i}_{j}_{k}_tri1')
             tri1.remove((i, j, k))
 
         for (i, j, k) in inf2[:cut_size//2]:
-            mdl.addConstr(mdl.addConstr(x[i, j] + x[i, k] + x[j, k] <= 2,
-                                        name=f'{i}_{j}_{k}_tri2'))
+            mdl.addConstr(x[i, j] + x[i, k] + x[j, k] <= 2, name=f'{i}_{j}_{k}_tri2')
             tri2.remove((i, j, k))
 
         mdl.optimize()
