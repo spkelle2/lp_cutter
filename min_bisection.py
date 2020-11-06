@@ -1,90 +1,101 @@
 import gurobipy as gu
-
-from ticdat import TicDatFactory
-from ticdat.utils import standard_main
-
-input_schema = TicDatFactory(
-    parameters=[['Name'], ['Value']],
-    a=[['Vertex 1', 'Vertex 2'], ['Exists']]
-)
-
-input_schema.set_data_type('a', 'Vertex 1', must_be_int=True)
-input_schema.set_data_type('a', 'Vertex 2', must_be_int=True)
-input_schema.set_data_type('a', 'Exists', inclusive_max=True, max=1,
-                           must_be_int=True)
-
-# dont repeat edges and no edge starts and ends at same vertex
-input_schema.add_data_row_predicate(
-    "a", predicate_name="Allowable Edge Check",
-    predicate=lambda row: row["Vertex 1"] < row["Vertex 2"])
-
-input_schema.add_parameter("Cut Proportion", default_value=.1, inclusive_max=True,
-                           min=0, max=1)
-
-solution_schema = TicDatFactory(
-    summary=[['Name'], ['Value']],
-    x=[['Node'], ['Cluster']]
-)
+import numpy as np
+import random
+import sys
 
 
-def data_integrity_checks(dat):
-    """Check that the data for our min bisection problem is "good". If so,
-    return the number of nodes in our graph
-
-    :param dat: the ticdat to check
-    :return n: the number of nodes in our graph
+def solve(n, p, q, cut_proportion):
     """
-    assert input_schema.good_tic_dat_object(dat)
-    assert not input_schema.find_data_type_failures(dat)
-    assert not input_schema.find_data_row_failures(dat)
 
-    n = max(v2 for (v1, v2) in dat.a) + 1
-    indices = range(n)
-    missing_pairs = [(i, j) for i in indices[:-1] for j in indices[i+1:] if
-                     dat.a.get((i, j)) is None]
-    assert not missing_pairs, f'Provide values for these vertex pairs: {missing_pairs}'
-    return n
-
-
-def solve(dat):
-    """A model for solving min bisection set up such that it is run repeatedly,
-    adding the most violated constraints each iteration until all constraints
-    are satisfied.
-
-    :param dat: a ticdat representing our input data for the min bisection model
+    :param n: size of our adjacency matrix (n x n)
+    :param p: likelihood of edge within cluster
+    :param q: likelihood of edge between clusters
+    :param cut_proportion: what proportion of total constraints to select from
+    those violated to add to our model
     :return:
     """
-    n = data_integrity_checks(dat)
 
+    indices = range(n)
+
+    # create our adjacency matrix
+    cluster1 = indices[:n // 2]
+    cluster2 = indices[n // 2:]
+    a = np.zeros((n, n))
+
+    # complete adjacency matrix for upper right entries excluding diagonal
+    for i in indices:
+        for j in indices[i + 1:]:
+            if {i, j} <= set(cluster1) or {i, j} <= set(cluster2):
+                a[i, j] = int(p > np.random.uniform())  # edge in same cluster with prob p
+            else:
+                a[i, j] = int(q > np.random.uniform())
+    # then copy them to bottom left
+    a = a + a.transpose()
+
+    # create index sets for triangle inequality constraints
+    tri1 = [(i, j, k) for i in indices for j in indices[i + 1:] for k in indices
+            if i != k != j]
+    tri2 = [(i, j, k) for i in indices for j in indices[i + 1:] for k in
+            indices[j + 1:]]
+    for index_set in [tri1, tri2]:
+        random.shuffle(index_set)
+    cut_size = int(cut_proportion*(len(tri1) + len(tri2)))
+
+    # build our model
     mdl = gu.Model("min bisection")
 
-    x = {(i, j): mdl.addVar(vtype='B', name=(i, j)) for (i, j) in dat.a}
+    # variables
+    x = {(i, j): mdl.addVar(vtype='B', name=f'{i}_{j}') for i in indices
+         for j in indices if i != j}
 
-    mdl.setObjective(gu.quicksum(f['Exists'] * x[i, j] for (i, j), f in dat.a),
+    # objective
+    mdl.setObjective(gu.quicksum(a[i, j] * x[i, j] for i in indices
+                                 for j in indices if i < j),
                      sense=gu.GRB.MINIMIZE)
 
-    mdl.addConstr(gu.quicksum(x[i, j] for (i, j) in x) == n**2/4,
+    # (3) Equal partition constraint
+    mdl.addConstr(gu.quicksum(x[i, j] for (i, j) in x if i < j) == n**2/4,
                   name='Equal Partitions')
 
-    #take small number of triangle inequality to begin
+    # (1) Add randomly 50 of the 1st triangle inequality constraints
+    for (i, j, k) in tri1[:50]:
+        mdl.addConstr(x[i, j] <= x[i, k] + x[j, k], name=f'{i}_{j}_{k}_tri1')
+    tri1 = tri1[50:]
 
-    # create initial feasible solution to compare constraints against
+    # (2) Add randomly 50 of the 2st triangle inequality constraints
+    for (i, j, k) in tri2[:50]:
+        mdl.addConstr(x[i, j] + x[i, k] + x[j, k] <= 2, name=f'{i}_{j}_{k}_tri2')
+    tri2 = tri2[50:]
+
     mdl.optimize()
-    assert mdl.status == gu.GRB.OPTIMAL, 'unconstrained solve should make solution'
+    assert mdl.status == gu.GRB.OPTIMAL, 'small initial solve should make solution'
 
     while True:
-        inf = {c: abs(sum(dat.nutrition_quantities[f, c]["Quantity"]*buy[f].x for
-                          f in dat.foods) - nutrition[c].x) for c in dat.categories
-               if not isclose(sum(dat.nutrition_quantities[f, c]["Quantity"]*buy[f].x
-                                  for f in dat.foods), nutrition[c].x)}
-        if not inf:
+        # find all constraints that are violated. note any violated constraint
+        # has same depth, so don't sweat finding the "most" violated ones
+        inf1 = [(i, j, k) for (i, j, k) in tri1 if x[i, j] > x[i, k] + x[j, k]]
+        inf2 = [(i, j, k) for (i, j, k) in tri2 if x[i, j] + x[i, k] + x[j, k] > 2]
+        if not inf1 or inf2:
             break
-        c = max(inf, key=inf.get)
-        mdl.addConstr(gu.quicksum(dat.nutrition_quantities[f, c]["Quantity"] * buy[f]
-                                  for f in dat.foods) == nutrition[c], name=c)
+
+        # im sure there's a better way to select from our most violated cuts
+        # but this is quick and easy for now
+        for (i, j, k) in inf1[:cut_size//2]:
+            mdl.addConstr(mdl.addConstr(x[i, j] <= x[i, k] + x[j, k],
+                                        name=f'{i}_{j}_{k}_tri1'))
+            tri1.remove((i, j, k))
+
+        for (i, j, k) in inf2[:cut_size//2]:
+            mdl.addConstr(mdl.addConstr(x[i, j] + x[i, k] + x[j, k] <= 2,
+                                        name=f'{i}_{j}_{k}_tri2'))
+            tri2.remove((i, j, k))
+
         mdl.optimize()
         assert mdl.status == gu.GRB.OPTIMAL, f"model ended up as: {mdl.status}"
 
+    print()
+
 
 if __name__ == '__main__':
-    standard_main(input_schema, solution_schema, solve)
+    solve(n=int(sys.argv[1]), p=float(sys.argv[2]), q=float(sys.argv[3]),
+          cut_proportion=float(sys.argv[4]))
