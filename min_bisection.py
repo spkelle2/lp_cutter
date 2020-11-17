@@ -2,6 +2,7 @@ import gurobipy as gu
 import numpy as np
 import random
 import sys
+import time
 
 
 def solve(n, p, q, cut_proportion):
@@ -32,21 +33,21 @@ def solve(n, p, q, cut_proportion):
     # then copy them to bottom left
     a = a + a.transpose()
 
-    # create index sets for triangle inequality constraints
-    tri1 = [(i, j, k) for i in indices for j in indices[i + 1:] for k in indices
-            if i != k != j]
-    tri2 = [(i, j, k) for i in indices for j in indices[i + 1:] for k in
-            indices[j + 1:]]
-    for index_set in [tri1, tri2]:
-        random.shuffle(index_set)
-    cut_size = int(cut_proportion*(len(tri1) + len(tri2)))
+    # create dictionary of triangle inequality constraints not yet added to model
+    # {(index_triple, constraint_number): amount_violated}
+    tri1 = {((i, j, k), 1): 0 for i in indices for j in indices[i + 1:] for k in
+            indices if i != k != j}
+    tri2 = {((i, j, k), 2): 0 for i in indices for j in indices[i + 1:] for k in
+            indices[j + 1:]}
+    c = {**tri1, **tri2}
+    cut_size = int(cut_proportion*len(c))
 
     # build our model
     mdl = gu.Model("min bisection")
     mdl.setParam(gu.GRB.Param.Method, 1)
 
     # variables
-    x = {(i, j): mdl.addVar(vtype='B', name=f'{i}_{j}') for i in indices
+    x = {(i, j): mdl.addVar(ub=1, name=f'{i}_{j}') for i in indices
          for j in indices if i != j}
 
     # objective
@@ -57,36 +58,33 @@ def solve(n, p, q, cut_proportion):
     mdl.addConstr(gu.quicksum(x[i, j] for (i, j) in x if i < j) == n**2/4,
                   name='Equal Partitions')
 
-    # (1) Add randomly 50 of the 1st triangle inequality constraints
-    for (i, j, k) in tri1[:50]:
-        mdl.addConstr(x[i, j] <= x[i, k] + x[j, k], name=f'{i}_{j}_{k}_tri1')
-    tri1 = tri1[50:]
+    def add_triangle_inequality(i, j, k, t):
+        if t == 1:
+            # (1) 1st triangle inequality constraint
+            mdl.addConstr(x[i, j] <= x[i, k] + x[j, k], name=f'{i}_{j}_{k}_tri1')
+        else:  # t == 2:
+            # (2) 2nd triangle inequality constraint
+            mdl.addConstr(x[i, j] + x[i, k] + x[j, k] <= 2, name=f'{i}_{j}_{k}_tri2')
+        del c[(i, j, k), t]
 
-    # (2) Add randomly 50 of the 2nd triangle inequality constraints
-    for (i, j, k) in tri2[:50]:
-        mdl.addConstr(x[i, j] + x[i, k] + x[j, k] <= 2, name=f'{i}_{j}_{k}_tri2')
-    tri2 = tri2[50:]
+    # Add randomly 100 of the triangle inequality constraints
+    for ((i, j, k), t) in random.sample(c.keys(), min(100, len(c))):
+        add_triangle_inequality(i, j, k, t)
 
     mdl.optimize()
     assert mdl.status == gu.GRB.OPTIMAL, 'small initial solve should make solution'
 
     while True:
-        # find all constraints that are violated. note any violated constraint
-        # has same depth, so don't sweat finding the "most" violated ones
-        inf1 = [(i, j, k) for (i, j, k) in tri1 if x[i, j].x > x[i, k].x + x[j, k].x]
-        inf2 = [(i, j, k) for (i, j, k) in tri2 if x[i, j].x + x[i, k].x + x[j, k].x > 2]
-        if not (inf1 or inf2):
+        # find all constraints that are violated. Could tolerance here...
+        # no need to normalize since same size vectors
+        c = {((i, j, k), t): x[i, j].x - x[i, k].x - x[j, k].x if t == 1 else
+             x[i, j].x + x[i, k].x + x[j, k].x - 2 for ((i, j, k), t) in c}
+        inf = [k for k in sorted(c, key=c.get, reverse=True) if c[k] > 0][:cut_size]
+        if not inf:
             break
 
-        # im sure there's a better way to select from our most violated cuts
-        # but this is quick and easy for now
-        for (i, j, k) in inf1[:cut_size//2]:
-            mdl.addConstr(x[i, j] <= x[i, k] + x[j, k], name=f'{i}_{j}_{k}_tri1')
-            tri1.remove((i, j, k))
-
-        for (i, j, k) in inf2[:cut_size//2]:
-            mdl.addConstr(x[i, j] + x[i, k] + x[j, k] <= 2, name=f'{i}_{j}_{k}_tri2')
-            tri2.remove((i, j, k))
+        for ((i, j, k), t) in inf:
+            add_triangle_inequality(i, j, k, t)
 
         mdl.optimize()
         assert mdl.status == gu.GRB.OPTIMAL, f"model ended up as: {mdl.status}"
@@ -95,5 +93,7 @@ def solve(n, p, q, cut_proportion):
 
 
 if __name__ == '__main__':
+    start = time.time()
     solve(n=int(sys.argv[1]), p=float(sys.argv[2]), q=float(sys.argv[3]),
           cut_proportion=float(sys.argv[4]))
+    print(f'solve time: {time.time() - start} seconds')
