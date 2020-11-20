@@ -81,7 +81,7 @@ class MinBisect:
 
         :return:
         """
-        self.mdl = gu.Model("min bisection")
+        self.mdl = gu.Model("min bisection")  # check to make sure this gives empty model
         self.mdl.setParam(gu.GRB.Param.Method, 1)
 
         # variables
