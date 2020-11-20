@@ -8,7 +8,4 @@ dependencies:
   - pandas
   - pip
   - python
-  - xlsxwriter
-  - pip:
-    - ticdat
 
