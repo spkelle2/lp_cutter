@@ -2,7 +2,19 @@ import gurobipy as gu
 import numpy as np
 import random
 import sys
+from ticdat import TicDatFactory
 import time
+
+solution_schema = TicDatFactory(
+    run_stats=[['solve_id', 'sub_solve_id'],
+               ['n', 'p', 'q', 'cut_type', 'cut_value', 'solve_type',
+                'cuts_sought', 'cuts_added', 'variables', 'constraints',
+                'cpu_time']],
+    summary_stats=[['solve_id'],
+                   ['n', 'p', 'q', 'cut_type', 'cut_value', 'solve_type',
+                    'cuts_sought', 'max_variables', 'max_constraints',
+                    'total_cpu_time']]
+)
 
 
 def create_adjacency_matrix(n, p, q):
@@ -55,7 +67,8 @@ def create_constraint_indices(indices):
 
 class MinBisect:
 
-    def __init__(self, n, p, q, cut_proportion):
+    def __init__(self, n, p, q, cut_proportion=None, number_of_cuts=None,
+                 solve_id=0):
         """Create our adjacency matrix and constraint indexes and declare all
         other needed attributes
 
@@ -64,15 +77,32 @@ class MinBisect:
         :param q: likelihood of edge between clusters
         :param cut_proportion: what proportion of total constraints to select from
         those violated to add to our model
+        :param number_of_cuts: how many constraints to select from those violated
+        to add to our model. Please only use at most one of number_of_cuts and
+        cut_proportion
+        :param solve_id: id to mark this run by in output data
         :return:
         """
         self.n = n
+        self.p = p
+        self.q = q
+        self.solve_id = solve_id
         self.indices = range(n)
         self.a = create_adjacency_matrix(n, p, q)
         self.c = create_constraint_indices(self.indices)
-        self.cut_size = int(cut_proportion*len(self.c))
+        assert not (cut_proportion and number_of_cuts), 'not both'
+        self.cut_type = 'proportion' if cut_proportion else 'fixed' if number_of_cuts else 'none'
+        self.cut_value = cut_proportion if cut_proportion else number_of_cuts
+        self.cut_size = int(cut_proportion*len(self.c)) if cut_proportion else number_of_cuts
         self.mdl = None
         self.x = None
+        self.current_sub_solve_id = -1
+        self.variables = 0
+        self.constraints = 0
+        self.run_stats = dict()
+        self.summary_stats = dict()
+        self.solve_type = None
+        self.inf = []
 
     def instantiate_model(self):
         """Does everything that solving iteratively and at once will share, namely
@@ -116,32 +146,76 @@ class MinBisect:
                                name=f'{i}_{j}_{k}_tri2')
         del self.c[(i, j, k), t]
 
+    def _summary_profile(func):
+        def wrapper(self):
+            solve_start = time.process_time()
+            retval = func(self)
+            solve_cpu_tume = time.process_time() - solve_start
+            self.summary_stats[self.solve_id] = {
+                'n': self.n,
+                'p': self.p,
+                'q': self.q,
+                'cut_type': self.cut_type,
+                'cut_value': self.cut_value,
+                'solve_type': self.solve_type,
+                'max_constraints': self.mdl.NumConstrs,
+                'max_variables': self.mdl.NumVars,
+                'total_cpu_time': solve_cpu_tume
+            }
+            return retval
+        return wrapper
+
+    def optimize(self):
+        sub_solve_start = time.process_time()
+        self.mdl.optimize()
+        sub_solve_cpu_time = time.process_time() - sub_solve_start
+        self.current_sub_solve_id += 1
+        self.constraints = self.mdl.NumConstrs
+        self.variables = self.mdl.NumVars
+        self.run_stats[self.solve_id, self.current_sub_solve_id] = {
+            'n': self.n,
+            'p': self.p,
+            'q': self.q,
+            'cut_type': self.cut_type,
+            'cut_value': self.cut_value,
+            'solve_type': self.solve_type,
+            'cuts_sought': self.cut_size,  # all if whole solve
+            'cuts_added': None,  # inf size
+            'constraints': self.mdl.NumConstrs,
+            'variables': self.mdl.NumVars,
+            'cpu_time': sub_solve_cpu_time
+        }
+
+
+    @_summary_profile
     def solve_once(self):
         """Solves the model with all constraints added at once
 
         :return:
         """
+        self.solve_type = 'whole'
         self.instantiate_model()
         keys = list(self.c.keys())
         for ((i, j, k), t) in keys:  # may need to make a list first
             self.add_triangle_inequality(i, j, k, t)
 
-        self.mdl.optimize()
+        self.optimize()
         assert self.mdl.status == gu.GRB.OPTIMAL, 'small initial solve should make solution'
 
+    @_summary_profile
     def solve_iteratively(self):
         """Solve the model by feeding in only the top most violated constraints,
         and repeat until no violated constraints remain
 
         :return:
         """
-
+        self.solve_type = 'iterative'
         self.instantiate_model()
         # Add randomly 100 of the triangle inequality constraints
         for ((i, j, k), t) in random.sample(self.c.keys(), min(100, len(self.c))):
             self.add_triangle_inequality(i, j, k, t)
 
-        self.mdl.optimize()
+        self.optimize()
         assert self.mdl.status == gu.GRB.OPTIMAL, 'small initial solve should make solution'
 
         while True:
@@ -150,15 +224,15 @@ class MinBisect:
             self.c = {((i, j, k), t): self.x[i, j].x - self.x[i, k].x - self.x[j, k].x
                       if t == 1 else self.x[i, j].x + self.x[i, k].x + self.x[j, k].x - 2
                       for ((i, j, k), t) in self.c}
-            inf = [k for k in sorted(self.c, key=self.c.get, reverse=True) if
-                   self.c[k] > 0][:self.cut_size]
-            if not inf:
+            self.inf = [k for k in sorted(self.c, key=self.c.get, reverse=True) if
+                        self.c[k] > 0][:self.cut_size]
+            if not self.inf:
                 break
 
-            for ((i, j, k), t) in inf:
+            for ((i, j, k), t) in self.inf:
                 self.add_triangle_inequality(i, j, k, t)
 
-            self.mdl.optimize()
+            self.optimize()
             assert self.mdl.status == gu.GRB.OPTIMAL, f"model ended up as: {self.mdl.status}"
 
 

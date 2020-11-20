@@ -77,9 +77,11 @@ class TestCreateConstraintIndices(unittest.TestCase):
 
 
 class TestInit(unittest.TestCase):
-    def test_all_exist(self):
-        # make sure all attributes exist and two functions called
-        pass
+    def test_proper_cut_size(self):
+        mb = MinBisect(8, .5, .1, cut_proportion=.1)
+        self.assertTrue(mb.cut_size == int(.1*len(mb.c)))
+        mb = MinBisect(8, .5, .1, number_of_cuts=10)
+        self.assertTrue(mb.cut_size == 10)
 
 
 class TestAddTriangleInequality(unittest.TestCase):
