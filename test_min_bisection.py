@@ -78,6 +78,12 @@ class TestCreateConstraintIndices(unittest.TestCase):
                          'there should not be any more indices')
 
 
+class TestInit(unittest.TestCase):
+    def test_all_exist(self):
+        # make sure all attributes exist and two functions called
+        pass
+
+
 class TestAddTriangleInequality(unittest.TestCase):
 
     def test_adds_and_deletes(self):
@@ -102,3 +108,14 @@ class TestInstantiateModel(unittest.TestCase):
                     self.assertTrue("x[i,j] exists")
         self.assertTrue(mb.mdl.getConstrByName(f'Equal Partitions'),
                         f'Equal Partition Constraint should exist')
+        # check that objective was set
+
+
+class TestSolveOnce:
+    def is_correct(self):
+        # solves to right solution
+
+
+class TestSolveIteratively:
+    def matches_solve_once(self):
+        # solves to same solution as solve_once
