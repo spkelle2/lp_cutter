@@ -85,7 +85,7 @@ class MinBisect:
         self.mdl.setParam(gu.GRB.Param.Method, 1)
 
         # variables
-        self.x = {(i, j): self.mdl.addVar(ub=1, name=f'{i}_{j}') for i in self.indices
+        self.x = {(i, j): self.mdl.addVar(ub=1, name=f'x_{i}_{j}') for i in self.indices
                   for j in self.indices if i != j}
 
         # objective
@@ -122,7 +122,8 @@ class MinBisect:
         :return:
         """
         self.instantiate_model()
-        for ((i, j, k), t) in self.c.keys():  # may need to make a list first
+        keys = list(self.c.keys())
+        for ((i, j, k), t) in keys:  # may need to make a list first
             self.add_triangle_inequality(i, j, k, t)
 
         self.mdl.optimize()

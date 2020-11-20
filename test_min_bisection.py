@@ -1,7 +1,5 @@
-import inspect
+from math import isclose
 import numpy as np
-import os
-import shutil
 import unittest
 
 from min_bisection import create_constraint_indices, create_adjacency_matrix, MinBisect
@@ -85,12 +83,12 @@ class TestInit(unittest.TestCase):
 
 
 class TestAddTriangleInequality(unittest.TestCase):
-
     def test_adds_and_deletes(self):
         mb = MinBisect(8, .5, .1, .1)
         mb.instantiate_model()
         ((i, j, k), t) = [k for k in mb.c.keys()][0]
         mb.add_triangle_inequality(i, j, k, t)
+        mb.mdl.update()
         self.assertTrue(mb.mdl.getConstrByName(f'{i}_{j}_{k}_tri{t}'),
                         f'constraint {i}_{j}_{k}_tri{t} should be added')
         self.assertFalse(((i, j, k), t) in mb.c,
@@ -98,24 +96,66 @@ class TestAddTriangleInequality(unittest.TestCase):
 
 
 class TestInstantiateModel(unittest.TestCase):
-    def everything_that_should_be_is(self):
+    def test_everything_that_should_be_is(self):
         indices = range(8)
         mb = MinBisect(8, .5, .1, .1)
         mb.instantiate_model()
         for i in indices:
             for j in indices:
                 if i != j:
-                    self.assertTrue("x[i,j] exists")
+                    self.assertTrue((i, j) in mb.x,
+                                    'any i != j should be in x')
+        mb.mdl.update()
         self.assertTrue(mb.mdl.getConstrByName(f'Equal Partitions'),
-                        f'Equal Partition Constraint should exist')
-        # check that objective was set
+                        'Equal Partition Constraint should exist')
+        self.assertTrue(mb.mdl.getObjective(),
+                        'Objective should be set')
 
 
-class TestSolveOnce:
-    def is_correct(self):
-        # solves to right solution
+class TestSolveOnce(unittest.TestCase):
+    def test_is_correct(self):
+        a = np.array([[0, 1, 0, 1, 0, 0, 0, 0],
+                      [1, 0, 1, 0, 0, 0, 0, 1],
+                      [0, 1, 0, 0, 0, 1, 1, 0],
+                      [1, 0, 0, 0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 1, 1],
+                      [0, 0, 1, 0, 0, 0, 0, 1],
+                      [0, 0, 1, 0, 1, 0, 0, 1],
+                      [0, 1, 0, 0, 1, 1, 1, 0]])
+        mb = MinBisect(8, .8, .1, .1)
+        mb.a = a
+        mb.instantiate_model()
+        mb.solve_once()
+        self.assertTrue(mb.mdl.ObjVal == 3, 'only three edges cross clusters')
+        self.assertTrue(mb.x[0, 1].x == mb.x[0, 2].x == mb.x[0, 3].x == 0,
+                        '0, 1, 2, and 3 should be one cluster')
+        self.assertTrue(mb.x[4, 5].x == mb.x[4, 6].x == mb.x[4, 7].x == 0,
+                        '4, 5, 6, and 7 should be one cluster')
 
 
-class TestSolveIteratively:
-    def matches_solve_once(self):
-        # solves to same solution as solve_once
+class TestSolveIteratively(unittest.TestCase):
+    def test_matches_solve_once_small(self):
+        mbo = MinBisect(8, .5, .1, .1)
+        mbi = MinBisect(8, .5, .1, .1)
+        mbi.a = mbo.a
+        mbo.instantiate_model()
+        mbi.instantiate_model()
+        mbo.solve_once()
+        mbi.solve_iteratively()
+        self.assertTrue(isclose(mbo.mdl.ObjVal, mbi.mdl.ObjVal, rel_tol=1e-3),
+                        f'one go obj {mbo.mdl.ObjVal} but iterative obj {mbi.mdl.ObjVal}')
+
+    def test_matches_solve_once_big(self):
+        mbo = MinBisect(40, .5, .1, .1)
+        mbi = MinBisect(40, .5, .1, .1)
+        mbi.a = mbo.a
+        mbo.instantiate_model()
+        mbi.instantiate_model()
+        mbo.solve_once()
+        mbi.solve_iteratively()
+        self.assertTrue(isclose(mbo.mdl.ObjVal, mbi.mdl.ObjVal, rel_tol=1e-3),
+                        f'one go obj {mbo.mdl.ObjVal} but iterative obj {mbi.mdl.ObjVal}')
+
+
+if __name__ == '__main__':
+    unittest.main()
