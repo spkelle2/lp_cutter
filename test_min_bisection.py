@@ -1,8 +1,10 @@
 from math import isclose
 import numpy as np
+import ticdat
 import unittest
 
-from min_bisection import create_constraint_indices, create_adjacency_matrix, MinBisect
+from min_bisection import create_constraint_indices, create_adjacency_matrix, \
+    MinBisect, solution_schema
 
 
 class TestCreateAdjacencyMatrix(unittest.TestCase):
@@ -76,16 +78,19 @@ class TestCreateConstraintIndices(unittest.TestCase):
                          'there should not be any more indices')
 
 
-class TestInit(unittest.TestCase):
-    def test_proper_cut_size(self):
+class TestMinBisection(unittest.TestCase):
+    def test_init(self):
+        # proportion
         mb = MinBisect(8, .5, .1, cut_proportion=.1)
-        self.assertTrue(mb.cut_size == int(.1*len(mb.c)))
+        self.assertTrue(mb.cut_type == 'proportion')
+        self.assertTrue(mb.cut_value == .1)
+
+        # fixed
         mb = MinBisect(8, .5, .1, number_of_cuts=10)
-        self.assertTrue(mb.cut_size == 10)
+        self.assertTrue(mb.cut_type == 'fixed')
+        self.assertTrue(mb.cut_value == 10)
 
-
-class TestAddTriangleInequality(unittest.TestCase):
-    def test_adds_and_deletes(self):
+    def test_triangle_inequality(self):
         mb = MinBisect(8, .5, .1, .1)
         mb.instantiate_model()
         ((i, j, k), t) = [k for k in mb.c.keys()][0]
@@ -96,9 +101,7 @@ class TestAddTriangleInequality(unittest.TestCase):
         self.assertFalse(((i, j, k), t) in mb.c,
                          f"(({i}, {j}, {k}), {t}) should be removed from c")
 
-
-class TestInstantiateModel(unittest.TestCase):
-    def test_everything_that_should_be_is(self):
+    def test_instantiate_model(self):
         indices = range(8)
         mb = MinBisect(8, .5, .1, .1)
         mb.instantiate_model()
@@ -113,9 +116,23 @@ class TestInstantiateModel(unittest.TestCase):
         self.assertTrue(mb.mdl.getObjective(),
                         'Objective should be set')
 
+    def test_instantiate_model_constraints(self):
+        mb = MinBisect(8, .5, .1, cut_proportion=.1)
+        mb.solve_type = 'iterative'
+        mb.instantiate_model()
+        self.assertTrue(mb.cut_size == int(.1 * len(mb.c)))
 
-class TestSolveOnce(unittest.TestCase):
-    def test_is_correct(self):
+        mb = MinBisect(8, .5, .1, number_of_cuts=10)
+        mb.solve_type = 'iterative'
+        mb.instantiate_model()
+        self.assertTrue(mb.cut_size == 10)
+
+        mb = MinBisect(8, .5, .1, cut_proportion=.1)
+        mb.solve_type = 'once'
+        mb.instantiate_model()
+        self.assertTrue(mb.cut_size == len(mb.c))
+
+    def test_solve_once(self):
         a = np.array([[0, 1, 0, 1, 0, 0, 0, 0],
                       [1, 0, 1, 0, 0, 0, 0, 1],
                       [0, 1, 0, 0, 0, 1, 1, 0],
@@ -126,7 +143,6 @@ class TestSolveOnce(unittest.TestCase):
                       [0, 1, 0, 0, 1, 1, 1, 0]])
         mb = MinBisect(8, .8, .1, .1)
         mb.a = a
-        mb.instantiate_model()
         mb.solve_once()
         self.assertTrue(mb.mdl.ObjVal == 3, 'only three edges cross clusters')
         self.assertTrue(mb.x[0, 1].x == mb.x[0, 2].x == mb.x[0, 3].x == 0,
@@ -134,29 +150,35 @@ class TestSolveOnce(unittest.TestCase):
         self.assertTrue(mb.x[4, 5].x == mb.x[4, 6].x == mb.x[4, 7].x == 0,
                         '4, 5, 6, and 7 should be one cluster')
 
+    def test_summary_profile(self):
+        mb = MinBisect(8, .8, .1, .1)
+        mb.solve_once()
+        self.assertTrue(solution_schema.good_tic_dat_object(mb.data))
+        self.assertTrue([(0, 'once')] == list(mb.data.summary_stats.keys()))
 
-class TestSolveIteratively(unittest.TestCase):
-    def test_matches_solve_once_small(self):
-        mbo = MinBisect(8, .5, .1, .1)
-        mbi = MinBisect(8, .5, .1, .1)
-        mbi.a = mbo.a
-        mbo.instantiate_model()
-        mbi.instantiate_model()
-        mbo.solve_once()
-        mbi.solve_iteratively()
-        self.assertTrue(isclose(mbo.mdl.ObjVal, mbi.mdl.ObjVal, rel_tol=1e-3),
-                        f'one go obj {mbo.mdl.ObjVal} but iterative obj {mbi.mdl.ObjVal}')
+    def test_solve_iteratively_matches_solve_once_small(self):
+        mb = MinBisect(8, .5, .1, .1)
+        mb.solve_once()
+        once_obj = mb.mdl.ObjVal
+        mb.solve_iteratively()
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+                        f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
-    def test_matches_solve_once_big(self):
-        mbo = MinBisect(40, .5, .1, .1)
-        mbi = MinBisect(40, .5, .1, .1)
-        mbi.a = mbo.a
-        mbo.instantiate_model()
-        mbi.instantiate_model()
-        mbo.solve_once()
-        mbi.solve_iteratively()
-        self.assertTrue(isclose(mbo.mdl.ObjVal, mbi.mdl.ObjVal, rel_tol=1e-3),
-                        f'one go obj {mbo.mdl.ObjVal} but iterative obj {mbi.mdl.ObjVal}')
+    def test_solve_iteratively_matches_solve_once_big(self):
+        mb = MinBisect(40, .5, .1, .1)
+        mb.solve_once()
+        once_obj = mb.mdl.ObjVal
+        mb.solve_iteratively()
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+                        f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
+
+    def test_optimize(self):
+        mb = MinBisect(8, .5, .1, .1)
+        mb.solve_type = 'test'
+        mb.instantiate_model()
+        mb.optimize()
+        self.assertTrue(solution_schema.good_tic_dat_object(mb.data))
+        self.assertTrue([(0, 0, 'test')] == list(mb.data.run_stats.keys()))
 
 
 if __name__ == '__main__':
