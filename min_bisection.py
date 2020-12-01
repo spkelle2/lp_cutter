@@ -6,13 +6,13 @@ from ticdat import TicDatFactory
 import time
 
 solution_schema = TicDatFactory(
-    run_stats=[['solve_id', 'sub_solve_id', 'solve_type'],
+    run_stats=[['solve_id', 'solve_type', 'sub_solve_id'],
                ['n', 'p', 'q', 'cut_type', 'cut_value', 'cuts_sought',
                 'cuts_added', 'variables', 'constraints', 'cpu_time']],
     summary_stats=[['solve_id', 'solve_type'],
-                   ['n', 'p', 'q', 'cut_type', 'cut_value', 'cuts_sought',
-                    'max_variables', 'max_constraints', 'total_cpu_time',
-                    'gurobi_cpu_time', 'non_gurobi_cpu_time', 'objective_value']]
+                   ['n', 'p', 'q', 'cut_type', 'cut_value', 'max_variables',
+                    'max_constraints', 'total_cpu_time', 'gurobi_cpu_time',
+                    'non_gurobi_cpu_time', 'objective_value']]
 )
 
 
@@ -82,6 +82,14 @@ class MinBisect:
         :param solve_id: id to mark this run by in output data
         :return:
         """
+        assert n % 2 == 0, 'n needs to be even'
+        assert 0 <= p <= 1, 'p is probability'
+        assert 0 <= q <= 1, 'q is probability'
+        assert cut_proportion is None or (0 <= cut_proportion <= 1), 'cut proportion is ratio'
+        assert number_of_cuts is None or number_of_cuts >= 1, 'need to have at least one cut'
+        assert (cut_proportion or number_of_cuts), 'at least one'
+        assert not (cut_proportion and number_of_cuts), 'not both'
+
         self.n = n
         self.p = p
         self.q = q
@@ -89,8 +97,6 @@ class MinBisect:
         self.indices = range(n)
         self.a = create_adjacency_matrix(n, p, q)
         self.c = None
-        assert (cut_proportion or number_of_cuts), 'at least one'
-        assert not (cut_proportion and number_of_cuts), 'not both'
         self.cut_type = 'proportion' if cut_proportion else 'fixed'
         self.cut_value = cut_proportion if cut_proportion else number_of_cuts
         self.cut_size = None
@@ -102,8 +108,9 @@ class MinBisect:
         self.data = solution_schema.TicDat()
         self.solve_type = None
         self.inf = []
+        self.first_iteration_cuts = 100
 
-    def instantiate_model(self):
+    def _instantiate_model(self):
         """Does everything that solving iteratively and at once will share, namely
         instantiating the model and variables as well as setting the objective
         and equal partition constraint.
@@ -112,8 +119,8 @@ class MinBisect:
         """
         self.c = create_constraint_indices(self.indices)
         self.cut_size = len(self.c) if self.solve_type == 'once' else \
-            int(self.cut_value*len(self.c)) if self.cut_type == 'proportion' else \
-            self.cut_value
+            int(self.cut_value * len(self.c)) if self.cut_type == 'proportion' else \
+                self.cut_value
         self.mdl = gu.Model("min bisection")  # check to make sure this gives empty model
         self.mdl.setParam(gu.GRB.Param.Method, 1)
 
@@ -129,7 +136,7 @@ class MinBisect:
         self.mdl.addConstr(gu.quicksum(self.x[i, j] for (i, j) in self.x if i < j)
                            == self.n ** 2 / 4, name='Equal Partitions')
 
-    def add_triangle_inequality(self, i, j, k, t):
+    def _add_triangle_inequality(self, i, j, k, t):
         """Adds a triangle inequality to the model and removes its index from
         future candidate constraints.
 
@@ -149,13 +156,14 @@ class MinBisect:
                                name=f'{i}_{j}_{k}_tri2')
         del self.c[(i, j, k), t]
 
-    # check decorator works as expected
     def _summary_profile(func):
         def wrapper(self):
             solve_start = time.process_time()
             retval = func(self)
-            solve_cpu_time = time.process_time() - solve_start
-            gurobi_cpu_time = sum(d['cpu_time'] for d in self.data.run_stats.values())
+            total_cpu_time = time.process_time() - solve_start
+            gurobi_cpu_time = sum(d['cpu_time'] for (_, solve_type, _), d in
+                                  self.data.run_stats.items() if
+                                  self.solve_type == solve_type)
             self.data.summary_stats[self.solve_id, self.solve_type] = {
                 'n': self.n,
                 'p': self.p,
@@ -164,34 +172,37 @@ class MinBisect:
                 'cut_value': self.cut_value,
                 'max_constraints': self.mdl.NumConstrs,
                 'max_variables': self.mdl.NumVars,
-                'total_cpu_time': solve_cpu_time,
+                'total_cpu_time': total_cpu_time,
                 'gurobi_cpu_time': gurobi_cpu_time,
-                'non_gurobi_cpu_time': solve_cpu_time - gurobi_cpu_time,
+                'non_gurobi_cpu_time': total_cpu_time - gurobi_cpu_time,
                 'objective_value': self.mdl.ObjVal
             }
             return retval
+
         return wrapper
 
-    def optimize(self):
-        self.current_sub_solve_id += 1
+    def _optimize(self):
+        if self.solve_type != 'once':
+            self.current_sub_solve_id += 1
         sub_solve_start = time.process_time()
         self.mdl.optimize()
         sub_solve_cpu_time = time.process_time() - sub_solve_start
         self.constraints = self.mdl.NumConstrs
         self.variables = self.mdl.NumVars
-        self.data.run_stats[self.solve_id, self.current_sub_solve_id, self.solve_type] = {
+        sub_solve_id = 0 if self.solve_type == 'once' else self.current_sub_solve_id
+        self.data.run_stats[self.solve_id, self.solve_type, sub_solve_id] = {
             'n': self.n,
             'p': self.p,
             'q': self.q,
             'cut_type': self.cut_type,
             'cut_value': self.cut_value,
-            'cuts_sought': self.cut_size,
+            'cuts_sought': len(self.inf) if self.solve_type == 'iterative' and
+                                            sub_solve_id == 0 else self.cut_size,
             'cuts_added': len(self.inf) if self.solve_type == 'iterative' else self.cut_size,
             'constraints': self.mdl.NumConstrs,
             'variables': self.mdl.NumVars,
             'cpu_time': sub_solve_cpu_time
         }
-
 
     @_summary_profile
     def solve_once(self):
@@ -200,12 +211,12 @@ class MinBisect:
         :return:
         """
         self.solve_type = 'once'
-        self.instantiate_model()
+        self._instantiate_model()
         keys = list(self.c.keys())
         for ((i, j, k), t) in keys:  # may need to make a list first
-            self.add_triangle_inequality(i, j, k, t)
+            self._add_triangle_inequality(i, j, k, t)
 
-        self.optimize()
+        self._optimize()
         assert self.mdl.status == gu.GRB.OPTIMAL, 'small initial solve should make solution'
 
     @_summary_profile
@@ -216,19 +227,21 @@ class MinBisect:
         :return:
         """
         self.solve_type = 'iterative'
-        self.instantiate_model()
+        self._instantiate_model()
         # Add randomly 100 of the triangle inequality constraints
-        for ((i, j, k), t) in random.sample(self.c.keys(), min(100, len(self.c))):
-            self.add_triangle_inequality(i, j, k, t)
+        self.inf = random.sample(self.c.keys(), min(self.first_iteration_cuts,
+                                                    len(self.c)))
+        for ((i, j, k), t) in self.inf:
+            self._add_triangle_inequality(i, j, k, t)
 
-        self.optimize()
+        self._optimize()
         assert self.mdl.status == gu.GRB.OPTIMAL, 'small initial solve should make solution'
 
         while True:
             # find how much each constraint is violated
             # no need to normalize since same size vectors
             self.c = {((i, j, k), t): self.x[i, j].x - self.x[i, k].x - self.x[j, k].x
-                      if t == 1 else self.x[i, j].x + self.x[i, k].x + self.x[j, k].x - 2
+            if t == 1 else self.x[i, j].x + self.x[i, k].x + self.x[j, k].x - 2
                       for ((i, j, k), t) in self.c}
             self.inf = [k for k in sorted(self.c, key=self.c.get, reverse=True) if
                         self.c[k] > 0][:self.cut_size]
@@ -236,9 +249,9 @@ class MinBisect:
                 break
 
             for ((i, j, k), t) in self.inf:
-                self.add_triangle_inequality(i, j, k, t)
+                self._add_triangle_inequality(i, j, k, t)
 
-            self.optimize()
+            self._optimize()
             assert self.mdl.status == gu.GRB.OPTIMAL, f"model ended up as: {self.mdl.status}"
 
 
