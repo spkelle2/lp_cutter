@@ -1,3 +1,7 @@
 /.idea/
 *.xlsx
 /__pycache__/
+sample_run_results/
+run_results/
+batch*/
+.ipynb_checkpoints/
