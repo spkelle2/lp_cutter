@@ -123,6 +123,7 @@ class MinBisect:
                 self.cut_value
         self.mdl = gu.Model("min bisection")  # check to make sure this gives empty model
         self.mdl.setParam(gu.GRB.Param.Method, 1)
+        self.mdl.setParam(gu.GRB.Param.OutputFlag, 0)
 
         # variables
         self.x = {(i, j): self.mdl.addVar(ub=1, name=f'x_{i}_{j}') for i in self.indices

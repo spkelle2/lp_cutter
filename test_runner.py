@@ -38,6 +38,16 @@ class TestRunExperiments(unittest.TestCase):
             self.assertTrue(f['cut_value'] in self.cut_proportions or
                             f['cut_value'] in self.numbers_of_cuts)
 
+    def test_works_with_no_proportions(self):
+        run_experiments(self.ns, self.ps, self.qs,
+                        numbers_of_cuts=self.numbers_of_cuts,
+                        repeats=self.repeats, fldr=self.fldr)
+
+    def test_works_with_no_numbers(self):
+        run_experiments(self.ns, self.ps, self.qs,
+                        cut_proportions=self.cut_proportions,
+                        repeats=self.repeats, fldr=self.fldr)
+
 
 if __name__ == '__main__':
     unittest.main()
