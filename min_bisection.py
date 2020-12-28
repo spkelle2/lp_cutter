@@ -253,6 +253,16 @@ class MinBisect:
             else:  # t == 4:
                 self.c[(i, j, k), t] = self.x[i, j].x + self.x[i, k].x + self.x[j, k].x - 2
 
+    def _find_most_violated_constraints(self):
+        """Find all constraint indices that represent infeasible constraints (i.e.
+        have values greater than the tolerance) then take the <self.cut_size>
+        most violated
+
+        :return:
+        """
+        self.inf = [k for k in sorted(self.c, key=self.c.get, reverse=True) if
+                    self.c[k] > self.tolerance][:self.cut_size]
+
     @_summary_profile
     def solve_iteratively(self):
         """Solve the model by feeding in only the top most violated constraints,
@@ -274,8 +284,7 @@ class MinBisect:
 
         while True:
             self._recalibrate_cut_depths()
-            self.inf = [k for k in sorted(self.c, key=self.c.get, reverse=True) if
-                        self.c[k] > self.tolerance][:self.cut_size]
+            self._find_most_violated_constraints()
             if not self.inf:
                 break
 

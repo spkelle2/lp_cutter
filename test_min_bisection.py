@@ -1,5 +1,8 @@
+import gurobipy as gu
 from math import isclose
 import numpy as np
+import random
+import re
 import unittest
 
 from min_bisection import create_constraint_indices, create_adjacency_matrix, \
@@ -65,14 +68,11 @@ class TestCreateConstraintIndices(unittest.TestCase):
         for i in indices:
             for j in indices:
                 for k in indices:
-                    if i < j and len({i, j, k}) == len([i, j, k]):
-                        self.assertTrue(((i, j, k), 1) in c,
-                                        f'i={i}, j={j}, k={k}, t=1 belongs in c')
-                        good_idx.add(((i, j, k), 1))
-                    if i < j < k:
-                        self.assertTrue(((i, j, k), 2) in c,
-                                        f'i={i}, j={j}, k={k}, t=1 belongs in c')
-                        good_idx.add(((i, j, k), 2))
+                    for t in [1, 2, 3, 4]:
+                        if i < j < k:
+                            self.assertTrue(((i, j, k), t) in c,
+                                            f'i={i}, j={j}, k={k}, t={t} belongs in c')
+                            good_idx.add(((i, j, k), t))
         self.assertFalse(set(c.keys()).difference(good_idx),
                          'there should not be any more indices')
 
@@ -104,8 +104,8 @@ class TestMinBisection(unittest.TestCase):
         mb._instantiate_model()
         for i in indices:
             for j in indices:
-                if i != j:
-                    self.assertTrue((i, j) in mb.x, 'any i != j should be in x')
+                if i < j:
+                    self.assertTrue((i, j) in mb.x, 'any i < j should be in x')
         mb.mdl.update()
         self.assertTrue(mb.mdl.getConstrByName(f'Equal Partitions'),
                         'Equal Partition Constraint should exist')
@@ -130,16 +130,60 @@ class TestMinBisection(unittest.TestCase):
         mb._instantiate_model()
         self.assertTrue(mb.cut_size == len(mb.c))
 
-    def test_triangle_inequality(self):
+    def test_add_triangle_inequality_adds_constraint_removes_index(self):
         mb = MinBisect(8, .5, .1, .1)
         mb._instantiate_model()
         ((i, j, k), t) = [k for k in mb.c.keys()][0]
         mb._add_triangle_inequality(i, j, k, t)
         mb.mdl.update()
+
+        # test that a constraint is added to model and removed from candidates
         self.assertTrue(mb.mdl.getConstrByName(f'{i}_{j}_{k}_tri{t}'),
                         f'constraint {i}_{j}_{k}_tri{t} should be added')
         self.assertFalse(((i, j, k), t) in mb.c,
                          f"(({i}, {j}, {k}), {t}) should be removed from c")
+
+    def test_add_triangle_inequality_adds_correct_constraint(self):
+        for t in range(1, 5):
+            mb = MinBisect(8, .5, .1, .1)
+            mb._instantiate_model()
+            ((i, j, k), t) = [k for k in mb.c.keys() if k[1] == t][0]
+            mb._add_triangle_inequality(i, j, k, t)
+            mb.mdl.update()
+            c = mb.mdl.getConstrByName(f'{i}_{j}_{k}_tri{t}')
+            lhs, sense, rhs = mb.mdl.getRow(c), c.Sense, c.RHS
+            r = re.compile('x_(?P<a>\d)_(?P<b>\d)')
+            x = {tuple(int(_) for _ in r.match(lhs.getVar(i).VarName).groups()):
+                 lhs.getCoeff(i) for i in range(3)}
+
+            self.assertTrue(sense == '<', 'should be leq constraint')
+            self.assertRaises(IndexError, lhs.getVar, 3)
+            if t == 1:  # assert adds constraint 1 correctly
+                self.assertTrue(x[i, j] == -1)
+                self.assertTrue(x[i, k] == -1)
+                self.assertTrue(x[j, k] == 1)
+                self.assertTrue(rhs == 0)
+            elif t == 2:  # assert adds constraint 2 correctly
+                self.assertTrue(x[i, j] == -1)
+                self.assertTrue(x[i, k] == 1)
+                self.assertTrue(x[j, k] == -1)
+                self.assertTrue(rhs == 0)
+            elif t == 3:  # assert adds constraint 3 correctly
+                self.assertTrue(x[i, j] == 1)
+                self.assertTrue(x[i, k] == -1)
+                self.assertTrue(x[j, k] == -1)
+                self.assertTrue(rhs == 0)
+            else:  # t == 4, assert adds constraint 4 correctly
+                self.assertTrue(x[i, j] == 1)
+                self.assertTrue(x[i, k] == 1)
+                self.assertTrue(x[j, k] == 1)
+                self.assertTrue(rhs == 2)
+
+    def test_add_triangle_inequality_blocks_bad_constraint(self):
+        mb = MinBisect(8, .5, .1, .1)
+        mb._instantiate_model()
+        for t in [0, 5]:
+            self.assertRaises(AssertionError, mb._add_triangle_inequality, 1, 2, 3, t)
 
     def test_summary_profile(self):
         mb = MinBisect(8, .8, .1, .1)
@@ -200,6 +244,7 @@ class TestMinBisection(unittest.TestCase):
 
     def test_optimize_cut_math_right(self):
         mb = MinBisect(8, .5, .1, number_of_cuts=10)
+        mb.first_iteration_cuts = 20
         mb.solve_once()
         mb.solve_iteratively()
         d = mb.data.run_stats
@@ -250,16 +295,49 @@ class TestMinBisection(unittest.TestCase):
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
     def test_recalibrate_cut_depths(self):
-        a = np.array([[0, 1, 0, 1, 0, 0, 0, 0],
-                      [1, 0, 1, 0, 0, 0, 0, 1],
-                      [0, 1, 0, 0, 0, 1, 1, 0],
-                      [1, 0, 0, 0, 0, 0, 0, 0],
-                      [0, 0, 0, 0, 0, 0, 1, 1],
-                      [0, 0, 1, 0, 0, 0, 0, 1],
-                      [0, 0, 1, 0, 1, 0, 0, 1],
-                      [0, 1, 0, 0, 1, 1, 1, 0]])
-        mb = MinBisect(8, .8, .1, .1)
+        a = np.array([[0, 1, 0, 1],
+                      [1, 0, 1, 0],
+                      [0, 1, 0, 1],
+                      [1, 0, 1, 0]])
+        mb = MinBisect(4, .8, .5, .1)
         mb.a = a
+
+        mb.solve_type = 'iterative'
+        mb._instantiate_model()
+        mb.mdl.optimize()
+        mb._recalibrate_cut_depths()
+        for (i, j, k) in {(i, j, k) for ((i, j, k), t) in mb.c}:
+            self.assertTrue(mb.c[(i, j, k), 1] == mb.x[j, k].x - mb.x[i, j].x - mb.x[i, k].x)
+            self.assertTrue(mb.c[(i, j, k), 2] == mb.x[i, k].x - mb.x[i, j].x - mb.x[j, k].x)
+            self.assertTrue(mb.c[(i, j, k), 3] == mb.x[i, j].x - mb.x[i, k].x - mb.x[j, k].x)
+            self.assertTrue(mb.c[(i, j, k), 4] == mb.x[i, j].x + mb.x[i, k].x + mb.x[j, k].x - 2)
+
+    def test_find_most_violated_constraints(self):
+        # use 100 to ensure we get some values less than 1 to test that sort is right
+        mb = MinBisect(52, .5, .1, number_of_cuts=100)
+        mb.solve_type = 'iterative'
+        mb._instantiate_model()
+        mb.first_iteration_cuts = 5000
+        mb.inf = random.sample(mb.c.keys(), min(mb.first_iteration_cuts, len(mb.c)))
+        for ((i, j, k), t) in mb.inf:
+            mb._add_triangle_inequality(i, j, k, t)
+        mb._optimize()
+        mb._recalibrate_cut_depths()
+        mb._find_most_violated_constraints()
+        self.assertTrue(len(mb.inf) == 100, 'we only add 100 cuts at once')
+        for k in random.sample(mb.inf, 20):
+            self.assertTrue(len([_ for _ in mb.c if mb.c[_] > mb.c[k]]) < 100,
+                            'there should be fewer than 100 constraints more violated')
+
+    def test_find_most_violated_constraints_when_it_selects_all(self):
+        mb = MinBisect(4, .5, .1, number_of_cuts=20)
+        mb.solve_type = 'iterative'
+        mb._instantiate_model()
+        mb._optimize()
+        mb._recalibrate_cut_depths()
+        mb._find_most_violated_constraints()
+        self.assertTrue(len(mb.inf) == len([k for k in mb.c if mb.c[k] == 1]),
+                        'select all infeasible cuts when total less than sought')
 
 
 if __name__ == '__main__':
