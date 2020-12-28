@@ -111,6 +111,8 @@ class TestMinBisection(unittest.TestCase):
                         'Equal Partition Constraint should exist')
         self.assertTrue(mb.mdl.getObjective(),
                         'Objective should be set')
+        self.assertTrue(mb.mdl.NumVars == mb.n*(mb.n-1)/2,
+                        f'we should have {mb.n}*({mb.n}-1)/2 variables')
 
     def test_instantiate_model_constraints(self):
         mb = MinBisect(8, .5, .1, cut_proportion=.1)

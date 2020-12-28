@@ -56,18 +56,15 @@ def create_constraint_indices(indices):
     constraint number
     """
 
-    tri1 = {((i, j, k), 1): 0 for i in indices for j in indices[i + 1:] for k in
-            indices if i != k != j}
-    tri2 = {((i, j, k), 2): 0 for i in indices for j in indices[i + 1:] for k in
-            indices[j + 1:]}
-    c = {**tri1, **tri2}
+    c = {((i, j, k), idx): 0 for i in indices for j in indices[i + 1:]
+         for k in indices[j + 1:] for idx in [1, 2, 3, 4]}
     return c
 
 
 class MinBisect:
 
     def __init__(self, n, p, q, cut_proportion=None, number_of_cuts=None,
-                 solve_id=0):
+                 solve_id=0, tolerance=.0001, output_flag=0):
         """Create our adjacency matrix and constraint indexes and declare all
         other needed attributes
 
@@ -80,6 +77,9 @@ class MinBisect:
         to add to our model. Please only use at most one of number_of_cuts and
         cut_proportion
         :param solve_id: id to mark this run by in output data
+        :param tolerance: how close to actually being satisfied a constraint
+        must be for us to just go ahead and consider it satisfied
+        :param output_flag: 0 to run gurobi without printing outputs, 1 otherwise
         :return:
         """
         assert n % 2 == 0, 'n needs to be even'
@@ -89,11 +89,15 @@ class MinBisect:
         assert number_of_cuts is None or number_of_cuts >= 1, 'need to have at least one cut'
         assert (cut_proportion or number_of_cuts), 'at least one'
         assert not (cut_proportion and number_of_cuts), 'not both'
+        assert 0 <= tolerance < 1, 'tolerance should be between 0 and 1'
+        assert output_flag in [0, 1], 'gurobi requires output flag to either be 0 or 1'
 
         self.n = n
         self.p = p
         self.q = q
         self.solve_id = solve_id
+        self.tolerance = tolerance
+        self.output_flag = output_flag
         self.indices = range(n)
         self.a = create_adjacency_matrix(n, p, q)
         self.c = None
@@ -122,19 +126,19 @@ class MinBisect:
             int(self.cut_value * len(self.c)) if self.cut_type == 'proportion' else \
                 self.cut_value
         self.mdl = gu.Model("min bisection")  # check to make sure this gives empty model
+        self.mdl.setParam(gu.GRB.Param.OutputFlag, self.output_flag)
         self.mdl.setParam(gu.GRB.Param.Method, 1)
-        self.mdl.setParam(gu.GRB.Param.OutputFlag, 0)
 
         # variables
         self.x = {(i, j): self.mdl.addVar(ub=1, name=f'x_{i}_{j}') for i in self.indices
-                  for j in self.indices if i != j}
+                  for j in self.indices if i < j}
 
         # objective
         self.mdl.setObjective(gu.quicksum(self.a[i, j] * self.x[i, j] for (i, j)
-                                          in self.x if i < j), sense=gu.GRB.MINIMIZE)
+                                          in self.x), sense=gu.GRB.MINIMIZE)
 
         # (3) Equal partition constraint
-        self.mdl.addConstr(gu.quicksum(self.x[i, j] for (i, j) in self.x if i < j)
+        self.mdl.addConstr(gu.quicksum(self.x[i, j] for (i, j) in self.x)
                            == self.n ** 2 / 4, name='Equal Partitions')
 
     def _add_triangle_inequality(self, i, j, k, t):
@@ -147,14 +151,23 @@ class MinBisect:
         :param t: whether this is constraint type 1 or 2
         :return:
         """
+        assert t in [1, 2, 3, 4], 'constraint type should be 1, 2, 3, or 4'
         if t == 1:
-            # (1) 1st triangle inequality constraint
-            self.mdl.addConstr(self.x[i, j] <= self.x[i, k] + self.x[j, k],
+            # (1) 1st triangle inequality constraint, type 1
+            self.mdl.addConstr(self.x[j, k] <= self.x[i, j] + self.x[i, k],
                                name=f'{i}_{j}_{k}_tri1')
-        else:  # t == 2:
+        elif t == 2:
+            # (1) 1st triangle inequality constraint, type 2
+            self.mdl.addConstr(self.x[i, k] <= self.x[i, j] + self.x[j, k],
+                               name=f'{i}_{j}_{k}_tri2')
+        elif t == 3:
+            # (1) 1st triangle inequality constraint, type 3
+            self.mdl.addConstr(self.x[i, j] <= self.x[i, k] + self.x[j, k],
+                               name=f'{i}_{j}_{k}_tri3')
+        else:  # t == 4:
             # (2) 2nd triangle inequality constraint
             self.mdl.addConstr(self.x[i, j] + self.x[i, k] + self.x[j, k] <= 2,
-                               name=f'{i}_{j}_{k}_tri2')
+                               name=f'{i}_{j}_{k}_tri4')
         del self.c[(i, j, k), t]
 
     def _summary_profile(func):
@@ -221,12 +234,24 @@ class MinBisect:
         assert self.mdl.status == gu.GRB.OPTIMAL, 'small initial solve should make solution'
 
     def _recalibrate_cut_depths(self):
-        # find how much each constraint is violated
-        # no need to normalize since same size vectors
-        c = {((i, j, k), t): self.x[i, j].x - self.x[i, k].x - self.x[j, k].x
-             if t == 1 else self.x[i, j].x + self.x[i, k].x + self.x[j, k].x - 2
-             for ((i, j, k), t) in self.c}
-        return c
+        """find how much each constraint is violated. don't worry about
+        normalizing since each vector has the same norm
+
+        for a constraint to be satisfied, its key should have a corresponding
+        value <= 0. Changing this such that the value <= tolerance allows constraints
+        close to being satisfied to still be considered satisfied
+
+        :return:
+        """
+        for ((i, j, k), t) in self.c:
+            if t == 1:
+                self.c[(i, j, k), t] = self.x[j, k].x - self.x[i, j].x - self.x[i, k].x
+            elif t == 2:
+                self.c[(i, j, k), t] = self.x[i, k].x - self.x[i, j].x - self.x[j, k].x
+            elif t == 3:
+                self.c[(i, j, k), t] = self.x[i, j].x - self.x[i, k].x - self.x[j, k].x
+            else:  # t == 4:
+                self.c[(i, j, k), t] = self.x[i, j].x + self.x[i, k].x + self.x[j, k].x - 2
 
     @_summary_profile
     def solve_iteratively(self):
@@ -237,7 +262,8 @@ class MinBisect:
         """
         self.solve_type = 'iterative'
         self._instantiate_model()
-        # Add randomly 100 of the triangle inequality constraints
+        # Add randomly <self.first_iteration_cuts> of the triangle inequality
+        # constraints or just all of them if there's less than <self.first_iteration_cuts>
         self.inf = random.sample(self.c.keys(), min(self.first_iteration_cuts,
                                                     len(self.c)))
         for ((i, j, k), t) in self.inf:
@@ -247,9 +273,9 @@ class MinBisect:
         assert self.mdl.status == gu.GRB.OPTIMAL, 'small initial solve should make solution'
 
         while True:
-            self.c = self._recalibrate_cut_depths()
+            self._recalibrate_cut_depths()
             self.inf = [k for k in sorted(self.c, key=self.c.get, reverse=True) if
-                        self.c[k] > 0][:self.cut_size]  # tolerance 10^-4
+                        self.c[k] > self.tolerance][:self.cut_size]
             if not self.inf:
                 break
 
