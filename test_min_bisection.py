@@ -247,6 +247,18 @@ class TestMinBisection(unittest.TestCase):
         self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
+    def test_recalibrate_cut_depths(self):
+        a = np.array([[0, 1, 0, 1, 0, 0, 0, 0],
+                      [1, 0, 1, 0, 0, 0, 0, 1],
+                      [0, 1, 0, 0, 0, 1, 1, 0],
+                      [1, 0, 0, 0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 1, 1],
+                      [0, 0, 1, 0, 0, 0, 0, 1],
+                      [0, 0, 1, 0, 1, 0, 0, 1],
+                      [0, 1, 0, 0, 1, 1, 1, 0]])
+        mb = MinBisect(8, .8, .1, .1)
+        mb.a = a
+
 
 if __name__ == '__main__':
     unittest.main()

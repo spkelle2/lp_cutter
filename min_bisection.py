@@ -220,6 +220,14 @@ class MinBisect:
         self._optimize()
         assert self.mdl.status == gu.GRB.OPTIMAL, 'small initial solve should make solution'
 
+    def _recalibrate_cut_depths(self):
+        # find how much each constraint is violated
+        # no need to normalize since same size vectors
+        c = {((i, j, k), t): self.x[i, j].x - self.x[i, k].x - self.x[j, k].x
+             if t == 1 else self.x[i, j].x + self.x[i, k].x + self.x[j, k].x - 2
+             for ((i, j, k), t) in self.c}
+        return c
+
     @_summary_profile
     def solve_iteratively(self):
         """Solve the model by feeding in only the top most violated constraints,
@@ -239,13 +247,9 @@ class MinBisect:
         assert self.mdl.status == gu.GRB.OPTIMAL, 'small initial solve should make solution'
 
         while True:
-            # find how much each constraint is violated
-            # no need to normalize since same size vectors
-            self.c = {((i, j, k), t): self.x[i, j].x - self.x[i, k].x - self.x[j, k].x
-            if t == 1 else self.x[i, j].x + self.x[i, k].x + self.x[j, k].x - 2
-                      for ((i, j, k), t) in self.c}
+            self.c = self._recalibrate_cut_depths()
             self.inf = [k for k in sorted(self.c, key=self.c.get, reverse=True) if
-                        self.c[k] > 0][:self.cut_size]
+                        self.c[k] > 0][:self.cut_size]  # tolerance 10^-4
             if not self.inf:
                 break
 
