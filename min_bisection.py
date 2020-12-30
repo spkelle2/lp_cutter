@@ -210,9 +210,11 @@ class MinBisect:
             solve_start = time.process_time()
             retval = func(self, *args, **kwargs)
             total_cpu_time = time.process_time() - solve_start
-            gurobi_cpu_time = sum(d['cpu_time'] for (_, solve_type, _, _, _), d
+            # sum over sub solve indices for this combination of solve
+            gurobi_cpu_time = sum(d['cpu_time'] for (si, st, m, ws, ssi), d
                                   in self.data.run_stats.items() if
-                                  self.solve_type == solve_type)
+                                  self.solve_type == st and self.method == m and
+                                  self.warm_str == ws)
             self.data.summary_stats[self.solve_id, self.solve_type, self.method,
                                     self.warm_str] = {
                 'n': self.n,

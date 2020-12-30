@@ -83,8 +83,8 @@ class TestMinBisection(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        # deletes file made in test_instantiate_model_gurobi_parameters
-        os.remove('guy_once_auto.txt')
+        if os.path.exists('guy_once_auto.txt'):
+            os.remove('guy_once_auto.txt')
 
     def test_init(self):
         # proportion
@@ -238,28 +238,48 @@ class TestMinBisection(unittest.TestCase):
             self.assertRaises(AssertionError, mb._add_triangle_inequality, 1, 2, 3, t)
 
     def test_summary_profile(self):
-        mb = MinBisect(8, .8, .1, .1)
+        mb = MinBisect(20, .5, .1, .1)
         mb.solve_once()
         self.assertTrue([(0, 'once', 'dual', 'cold')] == list(mb.data.summary_stats.keys()))
         mb.solve_iteratively()
         self.assertTrue([(0, 'once', 'dual', 'cold'), (0, 'iterative', 'dual', 'warm')]
                         == list(mb.data.summary_stats.keys()))
+        max_constraints = mb.mdl.NumConstrs
+        max_variables = mb.mdl.NumVars
+
+        # make a few runs so run time calcs are correct
+        mb.solve_iteratively(warm_start=False)
+        mb.solve_once(method='auto')
+        mb.solve_iteratively(method='auto')
+        mb.solve_iteratively(warm_start=False, method='auto')
         self.assertTrue(solution_schema.good_tic_dat_object(mb.data))
+
         data = mb.data.summary_stats[0, 'iterative', 'dual', 'warm']
-        self.assertTrue(data['n'] == 8)
-        self.assertTrue(data['p'] == .8)
+        self.assertTrue(data['n'] == 20)
+        self.assertTrue(data['p'] == .5)
         self.assertTrue(data['q'] == .1)
         self.assertTrue(data['cut_type'] == 'proportion')
         self.assertTrue(data['cut_value'] == .1)
-        self.assertTrue(data['max_constraints'] == mb.mdl.NumConstrs)
-        self.assertTrue(data['max_variables'] == mb.mdl.NumVars)
+        self.assertTrue(data['max_constraints'] == max_constraints)
+        self.assertTrue(data['max_variables'] == max_variables)
         self.assertTrue(data['total_cpu_time'] >= data['gurobi_cpu_time'])
         self.assertTrue(data['total_cpu_time'] >= data['non_gurobi_cpu_time'])
-        gurobi_cpu_time = sum(d['cpu_time'] for (_, solve_type, _, _, _), d in
-                              mb.data.run_stats.items() if solve_type == 'iterative')
+        gurobi_cpu_time = sum(d['cpu_time'] for (si, st, m, ws, ssi), d in
+                              mb.data.run_stats.items() if st == 'iterative'
+                              and m == 'dual' and ws == 'warm')
         self.assertTrue(data['gurobi_cpu_time'] == gurobi_cpu_time)
         self.assertTrue(data['total_cpu_time'] == data['gurobi_cpu_time'] + data['non_gurobi_cpu_time'])
-        self.assertTrue(data['objective_value'] == mb.mdl.ObjVal)
+        # compares different runs but they should all be same anyways
+        self.assertTrue(isclose(data['objective_value'], mb.mdl.ObjVal, rel_tol=1e-3))
+
+        # make sure all time values > 0
+        for f in mb.data.summary_stats.values():
+            self.assertTrue(f['gurobi_cpu_time'] >= 0)
+            self.assertTrue(f['non_gurobi_cpu_time'] >= 0)
+
+        # make sure all objective values are the same for each run
+        objs = [f['objective_value'] for f in mb.data.summary_stats.values()]
+        self.assertTrue(all(isclose(obj, objs[0], rel_tol=1e-3) for obj in objs))
 
     def test_optimize(self):
         mb = MinBisect(8, .5, .1, .1, write_mps=True)
