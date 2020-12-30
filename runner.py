@@ -1,4 +1,9 @@
+"""
+Call with python runner.py <fldr> <n_1> ... <n_m>
+"""
+
 from itertools import product
+import sys
 
 from min_bisection import MinBisect, solution_schema
 
@@ -53,13 +58,14 @@ def run_experiments(ns, ps, qs, cut_proportions=None, numbers_of_cuts=None,
 
 if __name__ == '__main__':
     kwargs = {
-        'ns': [10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
+        'ns': [int(n) for n in sys.argv[2:]],
         'ps': [.5, .8],
         'qs': [.1, .2],
         'cut_proportions': [.1],
         'repeats': 3,
         'warm_starts': [True, False],
-        'methods': ['dual', 'auto']
+        'methods': ['dual', 'auto'],
+        'fldr': sys.argv[1]
     }
     run_experiments(**kwargs)
 
