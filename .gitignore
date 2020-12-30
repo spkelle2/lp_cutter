@@ -5,3 +5,5 @@ sample_run_results/
 run_results/
 batch*/
 .ipynb_checkpoints/
+run/
+*.txt
