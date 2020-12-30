@@ -6,10 +6,10 @@ from ticdat import TicDatFactory
 import time
 
 solution_schema = TicDatFactory(
-    run_stats=[['solve_id', 'solve_type', 'sub_solve_id'],
+    run_stats=[['solve_id', 'solve_type', 'method', 'warm_start', 'sub_solve_id'],
                ['n', 'p', 'q', 'cut_type', 'cut_value', 'cuts_sought',
                 'cuts_added', 'variables', 'constraints', 'cpu_time']],
-    summary_stats=[['solve_id', 'solve_type'],
+    summary_stats=[['solve_id', 'solve_type', 'method', 'warm_start'],
                    ['n', 'p', 'q', 'cut_type', 'cut_value', 'max_variables',
                     'max_constraints', 'total_cpu_time', 'gurobi_cpu_time',
                     'non_gurobi_cpu_time', 'objective_value']]
@@ -56,18 +56,16 @@ def create_constraint_indices(indices):
     constraint number
     """
 
-    tri1 = {((i, j, k), 1): 0 for i in indices for j in indices[i + 1:] for k in
-            indices if i != k != j}
-    tri2 = {((i, j, k), 2): 0 for i in indices for j in indices[i + 1:] for k in
-            indices[j + 1:]}
-    c = {**tri1, **tri2}
+    c = {((i, j, k), idx): 0 for i in indices for j in indices[i + 1:]
+         for k in indices[j + 1:] for idx in [1, 2, 3, 4]}
     return c
 
 
 class MinBisect:
 
     def __init__(self, n, p, q, cut_proportion=None, number_of_cuts=None,
-                 solve_id=0):
+                 solve_id=0, tolerance=.0001, log_to_console=0, log_file_base='',
+                 write_mps=False, first_iteration_cuts=100):
         """Create our adjacency matrix and constraint indexes and declare all
         other needed attributes
 
@@ -80,6 +78,15 @@ class MinBisect:
         to add to our model. Please only use at most one of number_of_cuts and
         cut_proportion
         :param solve_id: id to mark this run by in output data
+        :param tolerance: how close to actually being satisfied a constraint
+        must be for us to just go ahead and consider it satisfied
+        :param log_to_console: 0 to run gurobi without printing outputs to console,
+        1 otherwise
+        :param log_file_base: base string to be shared between both log files.
+        Blank creates no log file
+        :param write_mps: whether or not to write out the .mps file for this experiment
+        :param first_iteration_cuts: number of cuts to add to the first solve
+        when solving iteratively
         :return:
         """
         assert n % 2 == 0, 'n needs to be even'
@@ -89,11 +96,20 @@ class MinBisect:
         assert number_of_cuts is None or number_of_cuts >= 1, 'need to have at least one cut'
         assert (cut_proportion or number_of_cuts), 'at least one'
         assert not (cut_proportion and number_of_cuts), 'not both'
+        assert 0 <= tolerance < 1, 'tolerance should be between 0 and 1'
+        assert log_to_console in [0, 1], 'gurobi requires log to console flag either 0 or 1'
+        assert isinstance(write_mps, bool), 'write_mps must be boolean'
+        assert isinstance(first_iteration_cuts, int) and first_iteration_cuts > 0
 
         self.n = n
         self.p = p
         self.q = q
         self.solve_id = solve_id
+        self.tolerance = tolerance
+        self.log_to_console = log_to_console
+        self.log_file_base = log_file_base
+        self.write_mps = write_mps
+
         self.indices = range(n)
         self.a = create_adjacency_matrix(n, p, q)
         self.c = None
@@ -102,40 +118,63 @@ class MinBisect:
         self.cut_size = None
         self.mdl = None
         self.x = None
-        self.current_sub_solve_id = -1
+        self.sub_solve_id = None
         self.variables = 0
         self.constraints = 0
         self.data = solution_schema.TicDat()
         self.solve_type = None
         self.inf = []
-        self.first_iteration_cuts = 100
+        self.first_iteration_cuts = first_iteration_cuts
+        self.method = None
+        self.warm_start = None
 
-    def _instantiate_model(self):
-        """Does everything that solving iteratively and at once will share, namely
+    @property
+    def file_combo(self):
+        return f'{self.solve_type}_{self.method}' \
+               f'{"" if self.solve_type != "iterative" else f"_{self.warm_str}"}'
+
+    @property
+    def warm_str(self):
+        return 'warm' if self.warm_start else 'cold'
+
+    def _instantiate_model(self, method='dual'):
+        """Does everything that solving iteratively and at once will share, e.g.
         instantiating the model and variables as well as setting the objective
         and equal partition constraint.
 
+        :param method: 'dual' to solve each iteration with dual simplex,
+        'auto' to let gurobi decide which solve method is best
+
         :return:
         """
+        assert method in ['dual', 'auto'], 'solve with dual or let gurobi decide'
+
+        self.method = method
         self.c = create_constraint_indices(self.indices)
+        self.sub_solve_id = -1
         self.cut_size = len(self.c) if self.solve_type == 'once' else \
             int(self.cut_value * len(self.c)) if self.cut_type == 'proportion' else \
-                self.cut_value
-        self.mdl = gu.Model("min bisection")  # check to make sure this gives empty model
-        self.mdl.setParam(gu.GRB.Param.Method, 1)
-        self.mdl.setParam(gu.GRB.Param.OutputFlag, 0)
+            self.cut_value
+
+        # model
+        self.mdl = gu.Model("min bisection")
+        self.mdl.setParam(gu.GRB.Param.LogToConsole, self.log_to_console)
+        self.mdl.setParam(gu.GRB.Param.Method, 1 if self.method == 'dual' else -1)
+        if self.log_file_base:
+            self.mdl.setParam(gu.GRB.Param.LogFile,
+                              f'{self.log_file_base}_{self.file_combo}.txt')
 
         # variables
-        self.x = {(i, j): self.mdl.addVar(ub=1, name=f'x_{i}_{j}') for i in self.indices
-                  for j in self.indices if i != j}
+        self.x = {(i, j): self.mdl.addVar(ub=1, name=f'x_{i}_{j}') for i in
+                  self.indices for j in self.indices if i < j}
 
         # objective
         self.mdl.setObjective(gu.quicksum(self.a[i, j] * self.x[i, j] for (i, j)
-                                          in self.x if i < j), sense=gu.GRB.MINIMIZE)
+                                          in self.x), sense=gu.GRB.MINIMIZE)
 
         # (3) Equal partition constraint
-        self.mdl.addConstr(gu.quicksum(self.x[i, j] for (i, j) in self.x if i < j)
-                           == self.n ** 2 / 4, name='Equal Partitions')
+        self.mdl.addConstr(gu.quicksum(self.x[i, j] for (i, j) in self.x)
+                           == self.n ** 2 / 4, name='equal_partitions')
 
     def _add_triangle_inequality(self, i, j, k, t):
         """Adds a triangle inequality to the model and removes its index from
@@ -147,25 +186,37 @@ class MinBisect:
         :param t: whether this is constraint type 1 or 2
         :return:
         """
+        assert t in [1, 2, 3, 4], 'constraint type should be 1, 2, 3, or 4'
         if t == 1:
-            # (1) 1st triangle inequality constraint
-            self.mdl.addConstr(self.x[i, j] <= self.x[i, k] + self.x[j, k],
+            # (1) 1st triangle inequality constraint, type 1
+            self.mdl.addConstr(self.x[j, k] <= self.x[i, j] + self.x[i, k],
                                name=f'{i}_{j}_{k}_tri1')
-        else:  # t == 2:
+        elif t == 2:
+            # (1) 1st triangle inequality constraint, type 2
+            self.mdl.addConstr(self.x[i, k] <= self.x[i, j] + self.x[j, k],
+                               name=f'{i}_{j}_{k}_tri2')
+        elif t == 3:
+            # (1) 1st triangle inequality constraint, type 3
+            self.mdl.addConstr(self.x[i, j] <= self.x[i, k] + self.x[j, k],
+                               name=f'{i}_{j}_{k}_tri3')
+        else:  # t == 4:
             # (2) 2nd triangle inequality constraint
             self.mdl.addConstr(self.x[i, j] + self.x[i, k] + self.x[j, k] <= 2,
-                               name=f'{i}_{j}_{k}_tri2')
+                               name=f'{i}_{j}_{k}_tri4')
         del self.c[(i, j, k), t]
 
     def _summary_profile(func):
-        def wrapper(self):
+        def wrapper(self, *args, **kwargs):
             solve_start = time.process_time()
-            retval = func(self)
+            retval = func(self, *args, **kwargs)
             total_cpu_time = time.process_time() - solve_start
-            gurobi_cpu_time = sum(d['cpu_time'] for (_, solve_type, _), d in
-                                  self.data.run_stats.items() if
-                                  self.solve_type == solve_type)
-            self.data.summary_stats[self.solve_id, self.solve_type] = {
+            # sum over sub solve indices for this combination of solve
+            gurobi_cpu_time = sum(d['cpu_time'] for (si, st, m, ws, ssi), d
+                                  in self.data.run_stats.items() if
+                                  self.solve_type == st and self.method == m and
+                                  self.warm_str == ws)
+            self.data.summary_stats[self.solve_id, self.solve_type, self.method,
+                                    self.warm_str] = {
                 'n': self.n,
                 'p': self.p,
                 'q': self.q,
@@ -183,22 +234,23 @@ class MinBisect:
         return wrapper
 
     def _optimize(self):
-        if self.solve_type != 'once':
-            self.current_sub_solve_id += 1
+        self.sub_solve_id += 1
+        if self.write_mps:
+            self.mdl.write(f'model_{self.file_combo}_{self.sub_solve_id}.mps')
         sub_solve_start = time.process_time()
         self.mdl.optimize()
         sub_solve_cpu_time = time.process_time() - sub_solve_start
         self.constraints = self.mdl.NumConstrs
         self.variables = self.mdl.NumVars
-        sub_solve_id = 0 if self.solve_type == 'once' else self.current_sub_solve_id
-        self.data.run_stats[self.solve_id, self.solve_type, sub_solve_id] = {
+        self.data.run_stats[self.solve_id, self.solve_type, self.method,
+                            self.warm_str, self.sub_solve_id] = {
             'n': self.n,
             'p': self.p,
             'q': self.q,
             'cut_type': self.cut_type,
             'cut_value': self.cut_value,
             'cuts_sought': len(self.inf) if self.solve_type == 'iterative' and
-                                            sub_solve_id == 0 else self.cut_size,
+                           self.sub_solve_id == 0 else self.cut_size,
             'cuts_added': len(self.inf) if self.solve_type == 'iterative' else self.cut_size,
             'constraints': self.mdl.NumConstrs,
             'variables': self.mdl.NumVars,
@@ -206,13 +258,18 @@ class MinBisect:
         }
 
     @_summary_profile
-    def solve_once(self):
+    def solve_once(self, method='dual'):
         """Solves the model with all constraints added at once
+
+        :param method: 'dual' to solve the model with dual simplex,
+        'auto' to let gurobi decide which solve method is best
 
         :return:
         """
         self.solve_type = 'once'
-        self._instantiate_model()
+        self.warm_start = False
+        self._instantiate_model(method)
+
         keys = list(self.c.keys())
         for ((i, j, k), t) in keys:  # may need to make a list first
             self._add_triangle_inequality(i, j, k, t)
@@ -220,16 +277,57 @@ class MinBisect:
         self._optimize()
         assert self.mdl.status == gu.GRB.OPTIMAL, 'small initial solve should make solution'
 
-    @_summary_profile
-    def solve_iteratively(self):
-        """Solve the model by feeding in only the top most violated constraints,
-        and repeat until no violated constraints remain
+    def _recalibrate_cut_depths(self):
+        """find how much each constraint is violated. don't worry about
+        normalizing since each vector has the same norm
+
+        for a constraint to be satisfied, its key should have a corresponding
+        value <= 0. Changing this such that the value <= tolerance allows constraints
+        close to being satisfied to still be considered satisfied
 
         :return:
         """
+        for ((i, j, k), t) in self.c:
+            if t == 1:
+                self.c[(i, j, k), t] = self.x[j, k].x - self.x[i, j].x - self.x[i, k].x
+            elif t == 2:
+                self.c[(i, j, k), t] = self.x[i, k].x - self.x[i, j].x - self.x[j, k].x
+            elif t == 3:
+                self.c[(i, j, k), t] = self.x[i, j].x - self.x[i, k].x - self.x[j, k].x
+            else:  # t == 4:
+                self.c[(i, j, k), t] = self.x[i, j].x + self.x[i, k].x + self.x[j, k].x - 2
+
+    def _find_most_violated_constraints(self):
+        """Find all constraint indices that represent infeasible constraints (i.e.
+        have values greater than the tolerance) then take the <self.cut_size>
+        most violated
+
+        :return:
+        """
+        c = {idx: dist for idx, dist in self.c.items() if dist > self.tolerance}
+        self.inf = sorted(c, key=c.get, reverse=True)[:self.cut_size]
+
+    @_summary_profile
+    def solve_iteratively(self, warm_start=True, method='dual'):
+        """Solve the model by feeding in only the top most violated constraints,
+        and repeat until no violated constraints remain
+
+        :param warm_start: Set to True to use the previous iteration's optimal
+        basis as the initial basis for the current. Intended to be used in
+        conjunction with solve_method='dual'
+        :param method: 'dual' to solve each iteration with dual simplex,
+        'auto' to let gurobi decide which solve method is best
+
+        :return:
+        """
+        assert isinstance(warm_start, bool)
+
         self.solve_type = 'iterative'
-        self._instantiate_model()
-        # Add randomly 100 of the triangle inequality constraints
+        self.warm_start = warm_start
+        self._instantiate_model(method)
+
+        # Add randomly <self.first_iteration_cuts> of the triangle inequality
+        # constraints or just all of them if there's less than <self.first_iteration_cuts>
         self.inf = random.sample(self.c.keys(), min(self.first_iteration_cuts,
                                                     len(self.c)))
         for ((i, j, k), t) in self.inf:
@@ -239,26 +337,46 @@ class MinBisect:
         assert self.mdl.status == gu.GRB.OPTIMAL, 'small initial solve should make solution'
 
         while True:
-            # find how much each constraint is violated
-            # no need to normalize since same size vectors
-            self.c = {((i, j, k), t): self.x[i, j].x - self.x[i, k].x - self.x[j, k].x
-            if t == 1 else self.x[i, j].x + self.x[i, k].x + self.x[j, k].x - 2
-                      for ((i, j, k), t) in self.c}
-            self.inf = [k for k in sorted(self.c, key=self.c.get, reverse=True) if
-                        self.c[k] > 0][:self.cut_size]
+            self._recalibrate_cut_depths()
+            self._find_most_violated_constraints()
             if not self.inf:
                 break
 
             for ((i, j, k), t) in self.inf:
                 self._add_triangle_inequality(i, j, k, t)
 
+            if warm_start:
+                self.mdl.reset()
             self._optimize()
             assert self.mdl.status == gu.GRB.OPTIMAL, f"model ended up as: {self.mdl.status}"
 
 
 if __name__ == '__main__':
-    start = time.time()
     mb = MinBisect(n=int(sys.argv[1]), p=float(sys.argv[2]), q=float(sys.argv[3]),
-                   cut_proportion=float(sys.argv[4]))
+                   cut_proportion=float(sys.argv[4]), log_file_base=sys.argv[5],
+                   write_mps=bool(sys.argv[6]))
+
+    # test solve once
+    print('solve once')
+    start_cpu = time.process_time()
+    mb.solve_once()
+    print(f'cpu solve time: {time.process_time() - start_cpu} cpu seconds')
+    print()
+
+    # test solve iteratively
+    print('solve iteratively')
+    start_cpu = time.process_time()
     mb.solve_iteratively()
-    print(f'solve time: {time.time() - start} seconds')
+    print(f'cpu solve time: {time.process_time() - start_cpu} cpu seconds')
+    print()
+
+    # test solve iteratively
+    print('solve iteratively reset')
+    start_cpu = time.process_time()
+    mb.solve_iteratively(reset_runs=True)
+    print(f'cpu solve time: {time.process_time() - start_cpu} cpu seconds')
+    print()
+
+    # print run stats
+    solution_schema.csv.write_directory(mb.data, sys.argv[5], allow_overwrite=True)
+
