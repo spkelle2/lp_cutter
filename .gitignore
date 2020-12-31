@@ -7,3 +7,4 @@ batch*/
 .ipynb_checkpoints/
 run/
 *.txt
+!requirements.txt
