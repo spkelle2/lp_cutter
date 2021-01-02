@@ -1,0 +1,10 @@
+#PBS -N runs_70
+#PBS -e /home/sek519/lp_cutter/runs_70.err
+#PBS -o /home/sek519/lp_cutter/runs_70.out
+#PBS -l nodes=polyp13:ppn=4,mem=10gb,vmem=15gb
+#PBS -q long
+
+cd /home/sek519/lp_cutter
+source /home/sek519/lp_cutter/env_lpc/bin/activate
+uname -n
+python3 runner.py runs_70 70
