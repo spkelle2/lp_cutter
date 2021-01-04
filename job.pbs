@@ -1,7 +1,7 @@
 #PBS -N sean_test
 #PBS -e /home/sek519/lp_cutter/test.err
 #PBS -o /home/sek519/lp_cutter/test.out
-#PBS -l nodes=polyp9:ppn=4,mem=10,vmem=15
+#PBS -l nodes=polyp9:ppn=4,mem=10gb,vmem=15gb
 #PBS -q long
 
 cd /home/sek519/lp_cutter

@@ -1,0 +1,9 @@
+#PBS -N updated_fixed_1000
+#PBS -e /home/sek519/lp_cutter/updated_fixed_1000.err
+#PBS -o /home/sek519/lp_cutter/updated_fixed_1000.out
+#PBS -l nodes=polyp13:ppn=4,mem=10gb,vmem=15gb
+#PBS -q long
+
+cd /home/sek519/lp_cutter
+source /home/sek519/lp_cutter/env_lpc/bin/activate
+python3 runner.py updated_fixed_1000 10 20 30 40
