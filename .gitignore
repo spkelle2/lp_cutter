@@ -10,3 +10,4 @@ run/
 !requirements.txt
 env_lpc/
 *.pdf
+test_results/

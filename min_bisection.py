@@ -352,31 +352,29 @@ class MinBisect:
 
 
 if __name__ == '__main__':
-    mb = MinBisect(n=int(sys.argv[1]), p=float(sys.argv[2]), q=float(sys.argv[3]),
-                   cut_proportion=float(sys.argv[4]), log_file_base=sys.argv[5],
-                   write_mps=bool(sys.argv[6]))
+    mb = MinBisect(n=50, p=.5, q=.1, number_of_cuts=1000)
+
+    print(f'n: {mb.n}, p: {mb.p}, q: {mb.q}, cuts: {mb.cut_value}')
+    # test solve iteratively
+    print('solve warm dual')
+    start_cpu = time.process_time()
+    mb.solve_iteratively(warm_start=True, method='dual')
+    print(f'cpu solve time: {time.process_time() - start_cpu} cpu seconds')
+    print()
+
+    print('solve warm auto')
+    start_cpu = time.process_time()
+    mb.solve_iteratively(warm_start=True, method='auto')
+    print(f'cpu solve time: {time.process_time() - start_cpu} cpu seconds')
+    print()
 
     # test solve once
     print('solve once')
     start_cpu = time.process_time()
-    mb.solve_once()
-    print(f'cpu solve time: {time.process_time() - start_cpu} cpu seconds')
-    print()
-
-    # test solve iteratively
-    print('solve iteratively')
-    start_cpu = time.process_time()
-    mb.solve_iteratively()
-    print(f'cpu solve time: {time.process_time() - start_cpu} cpu seconds')
-    print()
-
-    # test solve iteratively
-    print('solve iteratively reset')
-    start_cpu = time.process_time()
-    mb.solve_iteratively(reset_runs=True)
+    mb.solve_once(method='auto')
     print(f'cpu solve time: {time.process_time() - start_cpu} cpu seconds')
     print()
 
     # print run stats
-    solution_schema.csv.write_directory(mb.data, sys.argv[5], allow_overwrite=True)
+    solution_schema.csv.write_directory(mb.data, 'test_results', allow_overwrite=True)
 
