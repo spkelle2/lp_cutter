@@ -446,14 +446,14 @@ class TestMinBisection(unittest.TestCase):
     def test_solve_iteratively_cold(self, reset_patch):
         mb = MinBisect(8, .5, .1, number_of_cuts=20)
         mb.solve_iteratively(warm_start=False)
-        self.assertFalse(reset_patch.called)
+        # reset calls should equal number of iterations after the 1st
+        self.assertTrue(reset_patch.call_count == len(mb.data.run_stats) - 1)
 
     @patch('min_bisection.gu.Model.reset')
     def test_solve_iteratively_warm(self, reset_patch):
         mb = MinBisect(20, .5, .1, number_of_cuts=20)
         mb.solve_iteratively()
-        # reset calls should equal number of iterations after the 1st
-        self.assertTrue(reset_patch.call_count == len(mb.data.run_stats) - 1)
+        self.assertFalse(reset_patch.called)
 
 
 if __name__ == '__main__':

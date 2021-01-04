@@ -61,7 +61,7 @@ if __name__ == '__main__':
         'ns': [int(n) for n in sys.argv[2:]],
         'ps': [.5, .8],
         'qs': [.1, .2],
-        'numbers_of_cuts': [10, 30, 100, 300, 1000],
+        'numbers_of_cuts': [1000],
         'repeats': 3,
         'warm_starts': [True, False],
         'methods': ['dual', 'auto'],

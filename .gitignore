@@ -9,3 +9,4 @@ run/
 *.txt
 !requirements.txt
 env_lpc/
+*.pdf

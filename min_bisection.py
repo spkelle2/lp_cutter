@@ -99,7 +99,7 @@ class MinBisect:
         assert 0 <= tolerance < 1, 'tolerance should be between 0 and 1'
         assert log_to_console in [0, 1], 'gurobi requires log to console flag either 0 or 1'
         assert isinstance(write_mps, bool), 'write_mps must be boolean'
-        assert isinstance(first_iteration_cuts, int) and first_iteration_cuts > 0
+        assert isinstance(first_iteration_cuts, int) and first_iteration_cuts >= 0
 
         self.n = n
         self.p = p
@@ -345,7 +345,7 @@ class MinBisect:
             for ((i, j, k), t) in self.inf:
                 self._add_triangle_inequality(i, j, k, t)
 
-            if warm_start:
+            if not warm_start:
                 self.mdl.reset()
             self._optimize()
             assert self.mdl.status == gu.GRB.OPTIMAL, f"model ended up as: {self.mdl.status}"
