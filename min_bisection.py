@@ -353,7 +353,7 @@ class MinBisect:
             assert self.mdl.status == gu.GRB.OPTIMAL, f"model ended up as: {self.mdl.status}"
 
 
-@profile(sort_by='tottime', lines_to_print=10, strip_dirs=True)
+@profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
 def profilable_main():
     for i in range(50):
         print(f'test {i+1}')
