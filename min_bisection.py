@@ -5,6 +5,8 @@ import sys
 from ticdat import TicDatFactory
 import time
 
+from profiler import profile
+
 solution_schema = TicDatFactory(
     run_stats=[['solve_id', 'solve_type', 'method', 'warm_start', 'sub_solve_id'],
                ['n', 'p', 'q', 'cut_type', 'cut_value', 'cuts_sought',
@@ -351,30 +353,17 @@ class MinBisect:
             assert self.mdl.status == gu.GRB.OPTIMAL, f"model ended up as: {self.mdl.status}"
 
 
+@profile(sort_by='tottime', lines_to_print=10, strip_dirs=True)
+def profilable_main():
+    for i in range(50):
+        print(f'test {i+1}')
+        mb = MinBisect(n=16, p=.5, q=.1, number_of_cuts=20)
+        mb.solve_iteratively()
+
+
 if __name__ == '__main__':
-    mb = MinBisect(n=50, p=.5, q=.1, number_of_cuts=1000)
-
-    print(f'n: {mb.n}, p: {mb.p}, q: {mb.q}, cuts: {mb.cut_value}')
-    # test solve iteratively
-    print('solve warm dual')
-    start_cpu = time.process_time()
-    mb.solve_iteratively(warm_start=True, method='dual')
-    print(f'cpu solve time: {time.process_time() - start_cpu} cpu seconds')
-    print()
-
-    print('solve warm auto')
-    start_cpu = time.process_time()
-    mb.solve_iteratively(warm_start=True, method='auto')
-    print(f'cpu solve time: {time.process_time() - start_cpu} cpu seconds')
-    print()
-
-    # test solve once
-    print('solve once')
-    start_cpu = time.process_time()
-    mb.solve_once(method='auto')
-    print(f'cpu solve time: {time.process_time() - start_cpu} cpu seconds')
-    print()
+    profilable_main()
 
     # print run stats
-    solution_schema.csv.write_directory(mb.data, 'test_results', allow_overwrite=True)
+    # solution_schema.csv.write_directory(mb.data, 'test_results', allow_overwrite=True)
 

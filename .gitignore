@@ -11,3 +11,4 @@ run/
 env_lpc/
 *.pdf
 test_results/
+*.prof
