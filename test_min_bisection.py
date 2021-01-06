@@ -304,6 +304,13 @@ class TestMinBisection(unittest.TestCase):
         objs = [f['objective_value'] for f in mb.data.summary_stats.values()]
         self.assertTrue(all(isclose(obj, objs[0], rel_tol=1e-3) for obj in objs))
 
+        # make sure minimum order and proportions are correctly recorded
+        self.assertTrue(data['min_order'] == 0)
+        self.assertTrue(data['min_proportion'] == .1)
+        data = mb.data.summary_stats[0, 'once', 'auto', 'cold']
+        self.assertTrue(data['min_order'] == 0)
+        self.assertTrue(data['min_proportion'] == 1)
+
     def test_optimize(self):
         mb = MinBisect(8, .5, .1, .1, write_mps=True)
         mb.solve_type = 'iterative'
@@ -342,6 +349,14 @@ class TestMinBisection(unittest.TestCase):
         self.assertTrue(data['constraints'] == 2)  # because equal partition and 1 cut
         self.assertTrue(data['variables'] == mb.mdl.NumVars)
         self.assertTrue(data['cpu_time'] >= 0)
+        self.assertTrue(data['min_order'] == 0)
+        self.assertTrue(data['min_proportion'] == .1)
+        self.assertTrue(data['proportion_used'] in [.1, 1])
+
+        data = mb.data.run_stats[0, 'once', 'dual', 'cold', 0]
+        self.assertTrue(data['min_order'] == 0)
+        self.assertTrue(data['min_proportion'] == 1)
+        self.assertTrue(data['proportion_used'] == 1)
 
         # check mps files created
         for pth in ['model_iterative_dual_warm_0.mps',

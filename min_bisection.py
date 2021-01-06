@@ -10,11 +10,13 @@ from profiler import profile
 solution_schema = TicDatFactory(
     run_stats=[['solve_id', 'solve_type', 'method', 'warm_start', 'sub_solve_id'],
                ['n', 'p', 'q', 'cut_type', 'cut_value', 'cuts_sought',
-                'cuts_added', 'variables', 'constraints', 'cpu_time']],
+                'cuts_added', 'min_order', 'min_proportion', 'proportion_used',
+                'variables', 'constraints', 'cpu_time']],
     summary_stats=[['solve_id', 'solve_type', 'method', 'warm_start'],
-                   ['n', 'p', 'q', 'cut_type', 'cut_value', 'max_variables',
-                    'max_constraints', 'total_cpu_time', 'gurobi_cpu_time',
-                    'non_gurobi_cpu_time', 'objective_value']]
+                   ['n', 'p', 'q', 'cut_type', 'cut_value', 'min_order',
+                    'min_proportion', 'max_variables', 'max_constraints',
+                    'total_cpu_time', 'gurobi_cpu_time', 'non_gurobi_cpu_time',
+                    'objective_value']]
 )
 
 
@@ -120,6 +122,7 @@ class MinBisect:
         self.a = create_adjacency_matrix(n, p, q)
         self.c = None  # available cuts
         self.d = {}  # cut depths
+        self.proportion = 1  # proportion of cuts to search
         self.cut_type = 'proportion' if cut_proportion else 'fixed'
         self.cut_value = cut_proportion if cut_proportion else number_of_cuts
         self.cut_size = None
@@ -234,6 +237,8 @@ class MinBisect:
                 'q': self.q,
                 'cut_type': self.cut_type,
                 'cut_value': self.cut_value,
+                'min_order': self.min_order,
+                'min_proportion': min(self.search_proportions),
                 'max_constraints': self.mdl.NumConstrs,
                 'max_variables': self.mdl.NumVars,
                 'total_cpu_time': total_cpu_time,
@@ -264,6 +269,9 @@ class MinBisect:
             'cuts_sought': len(self.inf) if self.solve_type == 'iterative' and
                            self.sub_solve_id == 0 else self.cut_size,
             'cuts_added': len(self.inf) if self.solve_type == 'iterative' else self.cut_size,
+            'min_order': self.min_order,
+            'min_proportion': min(self.search_proportions),
+            'proportion_used': self.proportion,
             'constraints': self.mdl.NumConstrs,
             'variables': self.mdl.NumVars,
             'cpu_time': sub_solve_cpu_time
@@ -280,6 +288,7 @@ class MinBisect:
         """
         self.solve_type = 'once'
         self.warm_start = False
+        self.proportion = 1
         self._instantiate_model(method)
 
         # make new object so loop not thrown off by deletion
@@ -289,7 +298,7 @@ class MinBisect:
         self._optimize()
         assert self.mdl.status == gu.GRB.OPTIMAL, 'small initial solve should make solution'
 
-    def _recalibrate_cut_depths(self, p=1):
+    def _recalibrate_cut_depths(self):
         """find how much each constraint is violated. don't worry about
         normalizing since each vector has the same norm
 
@@ -299,8 +308,8 @@ class MinBisect:
 
         :return:
         """
-        for ((i, j, k), t) in random.sample(self.c, int(p*len(self.c)))\
-                if p < 1 else self.c:
+        for ((i, j, k), t) in random.sample(self.c, int(self.proportion*len(self.c)))\
+                if self.proportion < 1 else self.c:
             if t == 1:
                 cut_depth = self.x[j, k].x - self.x[i, j].x - self.x[i, k].x
             elif t == 2:
@@ -351,8 +360,9 @@ class MinBisect:
 
         while True:
             self.d = {}
-            for p in self.search_proportions:
-                self._recalibrate_cut_depths(p)
+            for proportion in self.search_proportions:
+                self.proportion = proportion
+                self._recalibrate_cut_depths()
                 self._find_most_violated_constraints()
                 if len(self.inf) == self.cut_size:
                     break
