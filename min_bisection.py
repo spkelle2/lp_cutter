@@ -279,7 +279,7 @@ class MinBisect:
         self._optimize()
         assert self.mdl.status == gu.GRB.OPTIMAL, 'small initial solve should make solution'
 
-    def _recalibrate_cut_depths(self):
+    def _recalibrate_cut_depths(self, p=1):
         """find how much each constraint is violated. don't worry about
         normalizing since each vector has the same norm
 
@@ -289,7 +289,8 @@ class MinBisect:
 
         :return:
         """
-        for ((i, j, k), t) in self.c:
+        for ((i, j, k), t) in random.sample(self.c.keys(), int(p*len(self.c)))\
+                if p < 1 else self.c:
             if t == 1:
                 self.c[(i, j, k), t] = self.x[j, k].x - self.x[i, j].x - self.x[i, k].x
             elif t == 2:
@@ -339,13 +340,19 @@ class MinBisect:
         assert self.mdl.status == gu.GRB.OPTIMAL, 'small initial solve should make solution'
 
         while True:
-            self._recalibrate_cut_depths()
-            self._find_most_violated_constraints()
+            self.c = {k: 0 for k in self.c}  # maybe a set here would be better
+            for p in [.001, .01, .1, 1]:
+                self._recalibrate_cut_depths(p)
+                self._find_most_violated_constraints()
+                if len(self.inf) == self.cut_size:
+                    break
+
             if not self.inf:
                 break
 
             for ((i, j, k), t) in self.inf:
                 self._add_triangle_inequality(i, j, k, t)
+            self.inf = []
 
             if not warm_start:
                 self.mdl.reset()
