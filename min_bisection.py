@@ -1,4 +1,5 @@
 import gurobipy as gu
+from math import ceil
 import numpy as np
 import random
 import sys
@@ -129,6 +130,7 @@ class MinBisect:
         self.first_iteration_cuts = first_iteration_cuts
         self.method = None
         self.warm_start = None
+        self.search_proportions = None
 
     @property
     def file_combo(self):
@@ -157,6 +159,8 @@ class MinBisect:
         self.cut_size = len(self.c) if self.solve_type == 'once' else \
             int(self.cut_value * len(self.c)) if self.cut_type == 'proportion' else \
             self.cut_value
+        self.search_proportions = [
+            10**x for x in range(ceil(np.log10(self.cut_size/len(self.c))), 1)]
 
         # model
         self.mdl = gu.Model("min bisection")
@@ -341,7 +345,7 @@ class MinBisect:
 
         while True:
             self.c = {k: 0 for k in self.c}  # maybe a set here would be better
-            for p in [.001, .01, .1, 1]:
+            for p in self.search_proportions:
                 self._recalibrate_cut_depths(p)
                 self._find_most_violated_constraints()
                 if len(self.inf) == self.cut_size:
@@ -362,9 +366,9 @@ class MinBisect:
 
 @profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
 def profilable_main():
-    for i in range(100):
+    for i in range(10):
         print(f'test {i+1}')
-        mb = MinBisect(n=16, p=.5, q=.1, number_of_cuts=20)
+        mb = MinBisect(n=40, p=.5, q=.1, number_of_cuts=20)
         mb.solve_iteratively()
 
 
