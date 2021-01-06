@@ -355,9 +355,9 @@ class MinBisect:
 
 @profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
 def profilable_main():
-    for i in range(100):
+    for i in range(10):
         print(f'test {i+1}')
-        mb = MinBisect(n=16, p=.5, q=.1, number_of_cuts=20)
+        mb = MinBisect(n=40, p=.5, q=.1, number_of_cuts=20)
         mb.solve_iteratively()
 
 
