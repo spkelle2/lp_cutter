@@ -195,6 +195,15 @@ class TestMinBisection(unittest.TestCase):
         mb._instantiate_model()
         self.assertTrue(mb.search_proportions == [.01, .1, 1])
 
+        mb = MinBisect(14, .5, .1, number_of_cuts=10, min_order=1)
+        mb.solve_type = 'iterative'
+        mb._instantiate_model()
+        self.assertTrue(mb.search_proportions == [.1, 1])
+
+        mb = MinBisect(14, .5, .1, number_of_cuts=10, min_order=5)
+        mb.solve_type = 'iterative'
+        mb._instantiate_model()
+        self.assertTrue(mb.search_proportions == [1])
 
     def test_add_triangle_inequality_adds_constraint_removes_index(self):
         mb = MinBisect(8, .5, .1, .1)

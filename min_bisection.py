@@ -67,7 +67,7 @@ class MinBisect:
 
     def __init__(self, n, p, q, cut_proportion=None, number_of_cuts=None,
                  solve_id=0, tolerance=.0001, log_to_console=0, log_file_base='',
-                 write_mps=False, first_iteration_cuts=100):
+                 write_mps=False, first_iteration_cuts=100, min_order=0):
         """Create our adjacency matrix and constraint indexes and declare all
         other needed attributes
 
@@ -89,6 +89,9 @@ class MinBisect:
         :param write_mps: whether or not to write out the .mps file for this experiment
         :param first_iteration_cuts: number of cuts to add to the first solve
         when solving iteratively
+        :param min_order: how many orders of magnitude larger must the smallest
+        set of constraints to search for violations be relative to how many cuts
+        we intend to add at once.
         :return:
         """
         assert n % 2 == 0, 'n needs to be even'
@@ -102,6 +105,7 @@ class MinBisect:
         assert log_to_console in [0, 1], 'gurobi requires log to console flag either 0 or 1'
         assert isinstance(write_mps, bool), 'write_mps must be boolean'
         assert isinstance(first_iteration_cuts, int) and first_iteration_cuts >= 0
+        assert isinstance(min_order, int) and min_order >= 0
 
         self.n = n
         self.p = p
@@ -131,6 +135,7 @@ class MinBisect:
         self.method = None
         self.warm_start = None
         self.search_proportions = None
+        self.min_order = min_order
 
     @property
     def file_combo(self):
@@ -160,8 +165,8 @@ class MinBisect:
             floor(self.cut_value * len(self.c)) if self.cut_type == 'proportion' \
             else self.cut_value
         self.search_proportions = [
-            10**x for x in range(ceil(np.log10(self.cut_size/len(self.c))), 1)
-        ]  # future: allow us to variably not use last couple
+            10**x for x in range(ceil(np.log10(self.cut_size/len(self.c))), 0)
+        ][self.min_order:] + [1]
 
         # model
         self.mdl = gu.Model("min bisection")
