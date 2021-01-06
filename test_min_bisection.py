@@ -75,7 +75,7 @@ class TestCreateConstraintIndices(unittest.TestCase):
                             self.assertTrue(((i, j, k), t) in c,
                                             f'i={i}, j={j}, k={k}, t={t} belongs in c')
                             good_idx.add(((i, j, k), t))
-        self.assertFalse(set(c.keys()).difference(good_idx),
+        self.assertFalse(c.difference(good_idx),
                          'there should not be any more indices')
 
 
@@ -182,10 +182,24 @@ class TestMinBisection(unittest.TestCase):
         mb._instantiate_model()
         self.assertTrue(mb.cut_size == len(mb.c))
 
+    def test_instantiate_model_search_proportions(self):
+        # 14 gives us 1456 total constraints which will test that .1 gets added
+        # to possible filter sizes to use
+        mb = MinBisect(14, .5, .1, cut_proportion=.1)
+        mb.solve_type = 'iterative'
+        mb._instantiate_model()
+        self.assertTrue(mb.search_proportions == [.1, 1])
+
+        mb = MinBisect(14, .5, .1, number_of_cuts=10)
+        mb.solve_type = 'iterative'
+        mb._instantiate_model()
+        self.assertTrue(mb.search_proportions == [.01, .1, 1])
+
+
     def test_add_triangle_inequality_adds_constraint_removes_index(self):
         mb = MinBisect(8, .5, .1, .1)
         mb._instantiate_model()
-        ((i, j, k), t) = [k for k in mb.c.keys()][0]
+        ((i, j, k), t) = list(mb.c)[0]
         mb._add_triangle_inequality(i, j, k, t)
         mb.mdl.update()
 
@@ -199,7 +213,7 @@ class TestMinBisection(unittest.TestCase):
         for t in range(1, 5):
             mb = MinBisect(8, .5, .1, .1)
             mb._instantiate_model()
-            ((i, j, k), t) = [k for k in mb.c.keys() if k[1] == t][0]
+            ((i, j, k), t) = [k for k in mb.c if k[1] == t][0]
             mb._add_triangle_inequality(i, j, k, t)
             mb.mdl.update()
             c = mb.mdl.getConstrByName(f'{i}_{j}_{k}_tri{t}')
@@ -239,7 +253,7 @@ class TestMinBisection(unittest.TestCase):
 
     def test_summary_profile(self):
         mb = MinBisect(20, .5, .1, .1)
-        mb.solve_once()
+        mb.solve_once('dual')
         self.assertTrue([(0, 'once', 'dual', 'cold')] == list(mb.data.summary_stats.keys()))
         mb.solve_iteratively()
         self.assertTrue([(0, 'once', 'dual', 'cold'), (0, 'iterative', 'dual', 'warm')]
@@ -291,7 +305,7 @@ class TestMinBisection(unittest.TestCase):
                         list(mb.data.run_stats.keys()))
 
         # tests adds a second correctly
-        ((i, j, k), t) = [k for k in mb.c.keys()][0]
+        ((i, j, k), t) = [k for k in mb.c][0]
         mb.inf = [((i, j, k), t)]
         mb._add_triangle_inequality(i, j, k, t)
         mb._optimize()
@@ -300,7 +314,7 @@ class TestMinBisection(unittest.TestCase):
                         == list(mb.data.run_stats.keys()))
 
         # tests adds all at once solve correctly
-        mb.solve_once()
+        mb.solve_once(method='dual')
         self.assertTrue([(0, 'iterative', 'dual', 'warm', 0),
                          (0, 'iterative', 'dual', 'warm', 1),
                          (0, 'once', 'dual', 'cold', 0)] ==
@@ -329,7 +343,7 @@ class TestMinBisection(unittest.TestCase):
     def test_optimize_cut_math_right(self):
         mb = MinBisect(8, .5, .1, number_of_cuts=10)
         mb.first_iteration_cuts = 20
-        mb.solve_once()
+        mb.solve_once(method='dual')
         mb.solve_iteratively()
         d = mb.data.run_stats
         self.assertTrue(d[0, 'iterative', 'dual', 'warm', 0]['cuts_sought'] ==
@@ -391,14 +405,24 @@ class TestMinBisection(unittest.TestCase):
         mb.a = a
 
         mb.solve_type = 'iterative'
+        # filter no cuts to ensure calculation right
+        mb.tolerance = -1000
         mb._instantiate_model()
         mb.mdl.optimize()
-        mb._recalibrate_cut_depths()
+        mb._recalibrate_cut_depths()  # just makes sure that the cut calc is right
         for (i, j, k) in {(i, j, k) for ((i, j, k), t) in mb.c}:
-            self.assertTrue(mb.c[(i, j, k), 1] == mb.x[j, k].x - mb.x[i, j].x - mb.x[i, k].x)
-            self.assertTrue(mb.c[(i, j, k), 2] == mb.x[i, k].x - mb.x[i, j].x - mb.x[j, k].x)
-            self.assertTrue(mb.c[(i, j, k), 3] == mb.x[i, j].x - mb.x[i, k].x - mb.x[j, k].x)
-            self.assertTrue(mb.c[(i, j, k), 4] == mb.x[i, j].x + mb.x[i, k].x + mb.x[j, k].x - 2)
+            self.assertTrue(mb.d[(i, j, k), 1] == mb.x[j, k].x - mb.x[i, j].x - mb.x[i, k].x)
+            self.assertTrue(mb.d[(i, j, k), 2] == mb.x[i, k].x - mb.x[i, j].x - mb.x[j, k].x)
+            self.assertTrue(mb.d[(i, j, k), 3] == mb.x[i, j].x - mb.x[i, k].x - mb.x[j, k].x)
+            self.assertTrue(mb.d[(i, j, k), 4] == mb.x[i, j].x + mb.x[i, k].x + mb.x[j, k].x - 2)
+
+        tol = .01
+        mb.tolerance = tol
+        inf_cuts = {idx for idx, depth in mb.d.items() if depth > tol}
+        mb.d = {}
+        mb._recalibrate_cut_depths()
+        self.assertFalse(inf_cuts.difference(mb.d.keys()))
+        self.assertTrue(len(mb.d) == 2)
 
     def test_find_most_violated_constraints(self):
         # use 100 to ensure we get some values less than 1 to test that sort is right
@@ -406,7 +430,7 @@ class TestMinBisection(unittest.TestCase):
         mb.solve_type = 'iterative'
         mb._instantiate_model()
         mb.first_iteration_cuts = 5000
-        mb.inf = random.sample(mb.c.keys(), min(mb.first_iteration_cuts, len(mb.c)))
+        mb.inf = random.sample(mb.c, min(mb.first_iteration_cuts, len(mb.c)))
         for ((i, j, k), t) in mb.inf:
             mb._add_triangle_inequality(i, j, k, t)
         mb._optimize()
@@ -414,33 +438,40 @@ class TestMinBisection(unittest.TestCase):
         mb._find_most_violated_constraints()
         self.assertTrue(len(mb.inf) == 100, 'we only add 100 cuts at once')
         for k in random.sample(mb.inf, 20):
-            self.assertTrue(len([_ for _ in mb.c if mb.c[_] > mb.c[k]]) < 100,
+            self.assertTrue(len([_ for _ in mb.d if mb.d[_] > mb.d[k]]) < 100,
                             'there should be fewer than 100 constraints more violated')
 
     def test_find_most_violated_constraints_when_it_selects_all(self):
-        mb = MinBisect(4, .5, .1, number_of_cuts=20)
+        mb = MinBisect(20, .5, .1, number_of_cuts=5000)
         mb.solve_type = 'iterative'
         mb._instantiate_model()
         mb._optimize()
         mb._recalibrate_cut_depths()
         mb._find_most_violated_constraints()
-        self.assertTrue(len(mb.inf) == len([k for k in mb.c if mb.c[k] == 1]),
+        # when using only cardinality constraint, 1 is only positive cut value
+        self.assertTrue(len(mb.inf) == len([k for k in mb.d if mb.d[k] == 1]),
                         'select all infeasible cuts when total less than sought')
 
-    def test_find_most_violated_constraints_uses_tolerance(self):
-        n = 4
-        indices = range(n)
-        c = {((i, j, k), idx): 10**(-j) for i in indices for j in indices[i + 1:]
-             for k in indices[j + 1:] for idx in [1, 2, 3, 4]}
-        mb = MinBisect(n, .5, .1, number_of_cuts=20)
-        mb.c = c
-        mb._find_most_violated_constraints()
-        self.assertTrue(len(mb.inf) == 16)
+    def test_recalibrate_cut_depths_uses_tolerance(self):
+        mb = MinBisect(4, .5, .1, number_of_cuts=20)
+        mb._instantiate_model()
+        mb.mdl.update()
+        for (i, j), var in mb.x.items():
+            var.lb = -1
+            mb.mdl.addConstr(mb.x[i, j] == -.00001)
+        mb.mdl.remove(mb.mdl.getConstrByName('equal_partitions'))
+        mb.mdl.optimize()
 
-        mb = MinBisect(n, .5, .1, number_of_cuts=20, tolerance=.05)
-        mb.c = c
+        mb._recalibrate_cut_depths()
         mb._find_most_violated_constraints()
-        self.assertTrue(len(mb.inf) == 8)
+        self.assertTrue(len(mb.inf) == 0,
+                        'all cut depths should be < tolerance')
+
+        mb.tolerance = .000001
+        mb._recalibrate_cut_depths()
+        mb._find_most_violated_constraints()
+        self.assertTrue(len(mb.inf) == 12,
+                        'only last triangle inequalities should be violated')
 
     @patch('min_bisection.gu.Model.reset')
     def test_solve_iteratively_cold(self, reset_patch):

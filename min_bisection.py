@@ -1,8 +1,7 @@
 import gurobipy as gu
-from math import ceil
+from math import ceil, floor
 import numpy as np
 import random
-import sys
 from ticdat import TicDatFactory
 import time
 
@@ -59,7 +58,7 @@ def create_constraint_indices(indices):
     constraint number
     """
 
-    c = {((i, j, k), idx): 0 for i in indices for j in indices[i + 1:]
+    c = {((i, j, k), idx) for i in indices for j in indices[i + 1:]
          for k in indices[j + 1:] for idx in [1, 2, 3, 4]}
     return c
 
@@ -115,7 +114,8 @@ class MinBisect:
 
         self.indices = range(n)
         self.a = create_adjacency_matrix(n, p, q)
-        self.c = None
+        self.c = None  # available cuts
+        self.d = {}  # cut depths
         self.cut_type = 'proportion' if cut_proportion else 'fixed'
         self.cut_value = cut_proportion if cut_proportion else number_of_cuts
         self.cut_size = None
@@ -157,10 +157,11 @@ class MinBisect:
         self.c = create_constraint_indices(self.indices)
         self.sub_solve_id = -1
         self.cut_size = len(self.c) if self.solve_type == 'once' else \
-            int(self.cut_value * len(self.c)) if self.cut_type == 'proportion' else \
-            self.cut_value
+            floor(self.cut_value * len(self.c)) if self.cut_type == 'proportion' \
+            else self.cut_value
         self.search_proportions = [
-            10**x for x in range(ceil(np.log10(self.cut_size/len(self.c))), 1)]
+            10**x for x in range(ceil(np.log10(self.cut_size/len(self.c))), 1)
+        ]  # future: allow us to variably not use last couple
 
         # model
         self.mdl = gu.Model("min bisection")
@@ -209,7 +210,7 @@ class MinBisect:
             # (2) 2nd triangle inequality constraint
             self.mdl.addConstr(self.x[i, j] + self.x[i, k] + self.x[j, k] <= 2,
                                name=f'{i}_{j}_{k}_tri4')
-        del self.c[(i, j, k), t]
+        self.c.remove(((i, j, k), t))
 
     def _summary_profile(func):
         def wrapper(self, *args, **kwargs):
@@ -264,7 +265,7 @@ class MinBisect:
         }
 
     @_summary_profile
-    def solve_once(self, method='dual'):
+    def solve_once(self, method='auto'):
         """Solves the model with all constraints added at once
 
         :param method: 'dual' to solve the model with dual simplex,
@@ -276,8 +277,8 @@ class MinBisect:
         self.warm_start = False
         self._instantiate_model(method)
 
-        keys = list(self.c.keys())
-        for ((i, j, k), t) in keys:  # may need to make a list first
+        # make new object so loop not thrown off by deletion
+        for ((i, j, k), t) in list(self.c):
             self._add_triangle_inequality(i, j, k, t)
 
         self._optimize()
@@ -293,16 +294,18 @@ class MinBisect:
 
         :return:
         """
-        for ((i, j, k), t) in random.sample(self.c.keys(), int(p*len(self.c)))\
+        for ((i, j, k), t) in random.sample(self.c, int(p*len(self.c)))\
                 if p < 1 else self.c:
             if t == 1:
-                self.c[(i, j, k), t] = self.x[j, k].x - self.x[i, j].x - self.x[i, k].x
+                cut_depth = self.x[j, k].x - self.x[i, j].x - self.x[i, k].x
             elif t == 2:
-                self.c[(i, j, k), t] = self.x[i, k].x - self.x[i, j].x - self.x[j, k].x
+                cut_depth = self.x[i, k].x - self.x[i, j].x - self.x[j, k].x
             elif t == 3:
-                self.c[(i, j, k), t] = self.x[i, j].x - self.x[i, k].x - self.x[j, k].x
+                cut_depth = self.x[i, j].x - self.x[i, k].x - self.x[j, k].x
             else:  # t == 4:
-                self.c[(i, j, k), t] = self.x[i, j].x + self.x[i, k].x + self.x[j, k].x - 2
+                cut_depth = self.x[i, j].x + self.x[i, k].x + self.x[j, k].x - 2
+            if cut_depth > self.tolerance:
+                self.d[(i, j, k), t] = cut_depth
 
     def _find_most_violated_constraints(self):
         """Find all constraint indices that represent infeasible constraints (i.e.
@@ -311,8 +314,7 @@ class MinBisect:
 
         :return:
         """
-        c = {idx: dist for idx, dist in self.c.items() if dist > self.tolerance}
-        self.inf = sorted(c, key=c.get, reverse=True)[:self.cut_size]
+        self.inf = sorted(self.d, key=self.d.get, reverse=True)[:self.cut_size]
 
     @_summary_profile
     def solve_iteratively(self, warm_start=True, method='dual'):
@@ -335,8 +337,7 @@ class MinBisect:
 
         # Add randomly <self.first_iteration_cuts> of the triangle inequality
         # constraints or just all of them if there's less than <self.first_iteration_cuts>
-        self.inf = random.sample(self.c.keys(), min(self.first_iteration_cuts,
-                                                    len(self.c)))
+        self.inf = random.sample(self.c, min(self.first_iteration_cuts, len(self.c)))
         for ((i, j, k), t) in self.inf:
             self._add_triangle_inequality(i, j, k, t)
 
@@ -344,7 +345,7 @@ class MinBisect:
         assert self.mdl.status == gu.GRB.OPTIMAL, 'small initial solve should make solution'
 
         while True:
-            self.c = {k: 0 for k in self.c}  # maybe a set here would be better
+            self.d = {}
             for p in self.search_proportions:
                 self._recalibrate_cut_depths(p)
                 self._find_most_violated_constraints()
@@ -365,15 +366,27 @@ class MinBisect:
 
 
 @profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
-def profilable_main():
+def profilable_iterative():
+    mbs = []
     for i in range(10):
         print(f'test {i+1}')
-        mb = MinBisect(n=40, p=.5, q=.1, number_of_cuts=20)
+        mb = MinBisect(n=50, p=.5, q=.1, number_of_cuts=1000)
+        mbs.append(mb)
         mb.solve_iteratively()
+    return mbs
+
+
+@profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
+def profilable_once(mbs):
+    for i, mb in enumerate(mbs):
+        print(f'test {i + 1 + len(mbs)}')
+        mb.solve_once(method='auto')
 
 
 if __name__ == '__main__':
-    profilable_main()
+    mbs = profilable_iterative()
+    profilable_once(mbs)
+
 
     # print run stats
     # solution_schema.csv.write_directory(mb.data, 'test_results', allow_overwrite=True)
