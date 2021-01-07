@@ -5,8 +5,6 @@ import random
 from ticdat import TicDatFactory
 import time
 
-from profiler import profile
-
 solution_schema = TicDatFactory(
     run_stats=[['solve_id', 'solve_type', 'method', 'warm_start', 'sub_solve_id'],
                ['n', 'p', 'q', 'cut_type', 'cut_value', 'cuts_sought',
@@ -380,25 +378,25 @@ class MinBisect:
             assert self.mdl.status == gu.GRB.OPTIMAL, f"model ended up as: {self.mdl.status}"
 
 
-@profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
-def profilable_iterative():
-    mbs = []
-    for i in range(10):
-        print(f'test {i+1}')
-        mb = MinBisect(n=50, p=.5, q=.1, number_of_cuts=1000)
-        mbs.append(mb)
-        mb.solve_iteratively()
-    return mbs
-
-
-@profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
-def profilable_once(mbs):
-    for i, mb in enumerate(mbs):
-        print(f'test {i + 1 + len(mbs)}')
-        mb.solve_once(method='auto')
-
-
 if __name__ == '__main__':
+    from profiler import profile
+
+    @profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
+    def profilable_iterative():
+        mbs = []
+        for i in range(10):
+            print(f'test {i + 1}')
+            mb = MinBisect(n=50, p=.5, q=.1, number_of_cuts=1000)
+            mbs.append(mb)
+            mb.solve_iteratively()
+        return mbs
+
+    @profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
+    def profilable_once(mbs):
+        for i, mb in enumerate(mbs):
+            print(f'test {i + 1 + len(mbs)}')
+            mb.solve_once(method='auto')
+
     mbs = profilable_iterative()
     profilable_once(mbs)
 
