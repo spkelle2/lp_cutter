@@ -397,7 +397,7 @@ if __name__ == '__main__':
     def profilable_once(mbs):
         for i, mb in enumerate(mbs):
             print(f'test {i + 1 + len(mbs)}')
-            mb.solve_once(method='auto')
+            mb.solve_once(method='dual')
             print()
 
     mbs = profilable_iterative()

@@ -52,8 +52,8 @@ def run_experiments(ns, ps, qs, cut_proportions=None, numbers_of_cuts=None,
 
     for i, combo in enumerate(combinations):
         print(f'running test {i+1} of {len(combinations)}')
-        mb = MinBisect(**combo, solve_id=i, tolerance=0)
-        mb.solve_once(method='auto')
+        mb = MinBisect(**combo, solve_id=i)
+        mb.solve_once(method='dual')
         mb.solve_iteratively(warm_start=True, method='dual')
         for t in solution_schema.all_tables:
             for pk, f in getattr(mb.data, t).items():
@@ -66,8 +66,8 @@ if __name__ == '__main__':
         'ns': [int(n) for n in sys.argv[2:]],
         'ps': [.5, .8],
         'qs': [.1, .2],
-        'numbers_of_cuts': [3000, 10000, 30000, 100000, 300000],
-        'min_orders': [0, 1, 2, 3],
+        'numbers_of_cuts': [10, 30, 100, 300, 1000, 3000, 10000],
+        'min_orders': [3, 2, 1, 0],
         'repeats': 5,
         'fldr': sys.argv[1]
     }
