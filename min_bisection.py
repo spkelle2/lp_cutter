@@ -371,7 +371,6 @@ class MinBisect:
 
             for ((i, j, k), t) in self.inf:
                 self._add_triangle_inequality(i, j, k, t)
-            self.inf = []
 
             if not warm_start:
                 self.mdl.reset()
@@ -385,12 +384,12 @@ if __name__ == '__main__':
     @profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
     def profilable_iterative():
         mbs = []
-        for i in range(1):
+        for i in range(2):
             print(f'test {i + 1}')
-            mb = MinBisect(n=60, p=.5, q=.25, number_of_cuts=3000,
-                           log_to_console=1, min_order=3)
+            mb = MinBisect(n=8, p=.5, q=.2, number_of_cuts=3000)
             mbs.append(mb)
             mb.solve_iteratively()
+            print(mb.a)
         return mbs
 
     @profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)

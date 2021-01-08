@@ -364,6 +364,20 @@ class TestMinBisection(unittest.TestCase):
             self.assertTrue(os.path.exists(pth))
             os.remove(pth)
 
+    def test_optimize_captures_correct_cuts(self):
+        mb = MinBisect(20, .5, .1, number_of_cuts=10)
+        mb.solve_iteratively()
+
+        # first iteration should match the fixed number provided
+        data = mb.data.run_stats[0, 'iterative', 'dual', 'warm', 0]
+        self.assertTrue(data['cuts_added'] == 100)
+        self.assertTrue(data['cuts_sought'] == 100)
+
+        # second iteration should match number of cuts
+        data = mb.data.run_stats[0, 'iterative', 'dual', 'warm', 1]
+        self.assertTrue(data['cuts_added'] == 10)
+        self.assertTrue(data['cuts_sought'] == 10)
+
     def test_optimize_cut_math_right(self):
         mb = MinBisect(8, .5, .1, number_of_cuts=10)
         mb.first_iteration_cuts = 20
