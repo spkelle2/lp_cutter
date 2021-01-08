@@ -1,12 +1,12 @@
 import gurobipy as gu
 import numpy as np
 import random
-import sys
 from ticdat import TicDatFactory
 import time
 
-from profiler import profile
+# from profiler import profile
 
+# headers for our output files
 solution_schema = TicDatFactory(
     run_stats=[['solve_id', 'solve_type', 'method', 'warm_start', 'sub_solve_id'],
                ['n', 'p', 'q', 'cut_type', 'cut_value', 'cuts_sought',
@@ -29,6 +29,7 @@ def create_adjacency_matrix(n, p, q):
     node in another cluster.
     :return a: 2-D array where a[i,j]=1 if edge exists between i and j, else 0
     """
+    np.random.seed()  # generate random seed of OS clock
     indices = range(n)
 
     # create our adjacency matrix
@@ -68,8 +69,7 @@ class MinBisect:
     def __init__(self, n, p, q, cut_proportion=None, number_of_cuts=None,
                  solve_id=0, tolerance=.0001, log_to_console=0, log_file_base='',
                  write_mps=False, first_iteration_cuts=100):
-        """Create our adjacency matrix and constraint indexes and declare all
-        other needed attributes
+        """Create our adjacency matrix and declare all other needed attributes
 
         :param n: size of our adjacency matrix (n x n)
         :param p: likelihood of edge within cluster
@@ -141,8 +141,8 @@ class MinBisect:
 
     def _instantiate_model(self, method='dual'):
         """Does everything that solving iteratively and at once will share, e.g.
-        instantiating the model and variables as well as setting the objective
-        and equal partition constraint.
+        instantiating the model object and variables as well as setting the
+        objective and equal partition constraint.
 
         :param method: 'dual' to solve each iteration with dual simplex,
         'auto' to let gurobi decide which solve method is best
@@ -185,7 +185,7 @@ class MinBisect:
         :param i: ith index
         :param j: jth index
         :param k: kth index
-        :param t: whether this is constraint type 1 or 2
+        :param t: whether this is constraint type 1, 2, 3, 4
         :return:
         """
         assert t in [1, 2, 3, 4], 'constraint type should be 1, 2, 3, or 4'
@@ -208,6 +208,11 @@ class MinBisect:
         del self.c[(i, j, k), t]
 
     def _summary_profile(func):
+        """A decorator that is used to collect metadata on once solves
+        and iterative solves
+
+        :return:
+        """
         def wrapper(self, *args, **kwargs):
             solve_start = time.process_time()
             retval = func(self, *args, **kwargs)
@@ -236,6 +241,10 @@ class MinBisect:
         return wrapper
 
     def _optimize(self):
+        """ A function that collects data on each LP solve
+
+        :return:
+        """
         self.sub_solve_id += 1
         if self.write_mps:
             self.mdl.write(f'model_{self.file_combo}_{self.sub_solve_id}.mps')
@@ -353,7 +362,7 @@ class MinBisect:
             assert self.mdl.status == gu.GRB.OPTIMAL, f"model ended up as: {self.mdl.status}"
 
 
-@profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
+# @profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
 def profilable_main():
     for i in range(10):
         print(f'test {i+1}')
@@ -362,8 +371,10 @@ def profilable_main():
 
 
 if __name__ == '__main__':
-    profilable_main()
+    mb = MinBisect(n=40, p=.5, q=.1, number_of_cuts=20)
+    mb.solve_once()
+    mb.solve_iteratively()
 
     # print run stats
-    # solution_schema.csv.write_directory(mb.data, 'test_results', allow_overwrite=True)
+    solution_schema.csv.write_directory(mb.data, 'test_results', allow_overwrite=True)
 

@@ -63,8 +63,8 @@ if __name__ == '__main__':
         'qs': [.1, .2],
         'numbers_of_cuts': [1000],
         'repeats': 3,
-        'warm_starts': [True, False],
-        'methods': ['dual', 'auto'],
+        'warm_starts': [True],
+        'methods': ['dual'],
         'fldr': sys.argv[1]
     }
     run_experiments(**kwargs)
