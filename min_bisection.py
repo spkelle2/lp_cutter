@@ -385,9 +385,10 @@ if __name__ == '__main__':
     @profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
     def profilable_iterative():
         mbs = []
-        for i in range(10):
+        for i in range(1):
             print(f'test {i + 1}')
-            mb = MinBisect(n=50, p=.5, q=.1, number_of_cuts=1000)
+            mb = MinBisect(n=60, p=.5, q=.25, number_of_cuts=3000,
+                           log_to_console=1, min_order=3)
             mbs.append(mb)
             mb.solve_iteratively()
         return mbs
@@ -396,12 +397,14 @@ if __name__ == '__main__':
     def profilable_once(mbs):
         for i, mb in enumerate(mbs):
             print(f'test {i + 1 + len(mbs)}')
-            mb.solve_once(method='auto')
+            mb.solve_once(method='dual')
+            print()
 
     mbs = profilable_iterative()
     profilable_once(mbs)
+    print()
 
 
     # print run stats
-    # solution_schema.csv.write_directory(mb.data, 'test_results', allow_overwrite=True)
+    solution_schema.csv.write_directory(mbs[0].data, 'test_results', allow_overwrite=True)
 
