@@ -1,10 +1,12 @@
 import gurobipy as gu
 import numpy as np
 import random
-import sys
 from ticdat import TicDatFactory
 import time
 
+# from profiler import profile
+
+# headers for our output files
 solution_schema = TicDatFactory(
     run_stats=[['solve_id', 'solve_type', 'method', 'warm_start', 'sub_solve_id'],
                ['n', 'p', 'q', 'cut_type', 'cut_value', 'cuts_sought',
@@ -27,6 +29,7 @@ def create_adjacency_matrix(n, p, q):
     node in another cluster.
     :return a: 2-D array where a[i,j]=1 if edge exists between i and j, else 0
     """
+    np.random.seed()  # generate random seed of OS clock
     indices = range(n)
 
     # create our adjacency matrix
@@ -66,8 +69,7 @@ class MinBisect:
     def __init__(self, n, p, q, cut_proportion=None, number_of_cuts=None,
                  solve_id=0, tolerance=.0001, log_to_console=0, log_file_base='',
                  write_mps=False, first_iteration_cuts=100):
-        """Create our adjacency matrix and constraint indexes and declare all
-        other needed attributes
+        """Create our adjacency matrix and declare all other needed attributes
 
         :param n: size of our adjacency matrix (n x n)
         :param p: likelihood of edge within cluster
@@ -99,7 +101,7 @@ class MinBisect:
         assert 0 <= tolerance < 1, 'tolerance should be between 0 and 1'
         assert log_to_console in [0, 1], 'gurobi requires log to console flag either 0 or 1'
         assert isinstance(write_mps, bool), 'write_mps must be boolean'
-        assert isinstance(first_iteration_cuts, int) and first_iteration_cuts > 0
+        assert isinstance(first_iteration_cuts, int) and first_iteration_cuts >= 0
 
         self.n = n
         self.p = p
@@ -139,8 +141,8 @@ class MinBisect:
 
     def _instantiate_model(self, method='dual'):
         """Does everything that solving iteratively and at once will share, e.g.
-        instantiating the model and variables as well as setting the objective
-        and equal partition constraint.
+        instantiating the model object and variables as well as setting the
+        objective and equal partition constraint.
 
         :param method: 'dual' to solve each iteration with dual simplex,
         'auto' to let gurobi decide which solve method is best
@@ -183,7 +185,7 @@ class MinBisect:
         :param i: ith index
         :param j: jth index
         :param k: kth index
-        :param t: whether this is constraint type 1 or 2
+        :param t: whether this is constraint type 1, 2, 3, 4
         :return:
         """
         assert t in [1, 2, 3, 4], 'constraint type should be 1, 2, 3, or 4'
@@ -206,6 +208,11 @@ class MinBisect:
         del self.c[(i, j, k), t]
 
     def _summary_profile(func):
+        """A decorator that is used to collect metadata on once solves
+        and iterative solves
+
+        :return:
+        """
         def wrapper(self, *args, **kwargs):
             solve_start = time.process_time()
             retval = func(self, *args, **kwargs)
@@ -234,6 +241,10 @@ class MinBisect:
         return wrapper
 
     def _optimize(self):
+        """ A function that collects data on each LP solve
+
+        :return:
+        """
         self.sub_solve_id += 1
         if self.write_mps:
             self.mdl.write(f'model_{self.file_combo}_{self.sub_solve_id}.mps')
@@ -345,38 +356,25 @@ class MinBisect:
             for ((i, j, k), t) in self.inf:
                 self._add_triangle_inequality(i, j, k, t)
 
-            if warm_start:
+            if not warm_start:
                 self.mdl.reset()
             self._optimize()
             assert self.mdl.status == gu.GRB.OPTIMAL, f"model ended up as: {self.mdl.status}"
 
 
+# @profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
+def profilable_main():
+    for i in range(10):
+        print(f'test {i+1}')
+        mb = MinBisect(n=40, p=.5, q=.1, number_of_cuts=20)
+        mb.solve_iteratively()
+
+
 if __name__ == '__main__':
-    mb = MinBisect(n=int(sys.argv[1]), p=float(sys.argv[2]), q=float(sys.argv[3]),
-                   cut_proportion=float(sys.argv[4]), log_file_base=sys.argv[5],
-                   write_mps=bool(sys.argv[6]))
-
-    # test solve once
-    print('solve once')
-    start_cpu = time.process_time()
+    mb = MinBisect(n=40, p=.5, q=.1, number_of_cuts=20)
     mb.solve_once()
-    print(f'cpu solve time: {time.process_time() - start_cpu} cpu seconds')
-    print()
-
-    # test solve iteratively
-    print('solve iteratively')
-    start_cpu = time.process_time()
     mb.solve_iteratively()
-    print(f'cpu solve time: {time.process_time() - start_cpu} cpu seconds')
-    print()
-
-    # test solve iteratively
-    print('solve iteratively reset')
-    start_cpu = time.process_time()
-    mb.solve_iteratively(reset_runs=True)
-    print(f'cpu solve time: {time.process_time() - start_cpu} cpu seconds')
-    print()
 
     # print run stats
-    solution_schema.csv.write_directory(mb.data, sys.argv[5], allow_overwrite=True)
+    solution_schema.csv.write_directory(mb.data, 'test_results', allow_overwrite=True)
 

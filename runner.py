@@ -61,10 +61,10 @@ if __name__ == '__main__':
         'ns': [int(n) for n in sys.argv[2:]],
         'ps': [.5, .8],
         'qs': [.1, .2],
-        'cut_proportions': [.1],
+        'numbers_of_cuts': [1000],
         'repeats': 3,
-        'warm_starts': [True, False],
-        'methods': ['dual', 'auto'],
+        'warm_starts': [True],
+        'methods': ['dual'],
         'fldr': sys.argv[1]
     }
     run_experiments(**kwargs)

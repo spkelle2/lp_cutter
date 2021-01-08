@@ -7,3 +7,8 @@ batch*/
 .ipynb_checkpoints/
 run/
 *.txt
+!requirements.txt
+env_lpc/
+*.pdf
+test_results/
+*.prof
