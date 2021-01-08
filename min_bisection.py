@@ -29,6 +29,7 @@ def create_adjacency_matrix(n, p, q):
     node in another cluster.
     :return a: 2-D array where a[i,j]=1 if edge exists between i and j, else 0
     """
+    np.random.seed()  # sets new seed based on OS clock
     indices = range(n)
 
     # create our adjacency matrix
@@ -379,24 +380,24 @@ class MinBisect:
 
 
 if __name__ == '__main__':
-    from profiler import profile
+    # from profiler import profile
 
-    @profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
+    # @profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
     def profilable_iterative():
         mbs = []
-        for i in range(2):
+        for i in range(1):
             print(f'test {i + 1}')
-            mb = MinBisect(n=8, p=.5, q=.2, number_of_cuts=3000)
+            mb = MinBisect(n=80, p=.5, q=.1, number_of_cuts=3000, log_to_console=1,
+                           min_order=2)
             mbs.append(mb)
             mb.solve_iteratively()
-            print(mb.a)
         return mbs
 
-    @profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
+    # @profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
     def profilable_once(mbs):
         for i, mb in enumerate(mbs):
             print(f'test {i + 1 + len(mbs)}')
-            mb.solve_once(method='dual')
+            mb.solve_once(method='auto')
             print()
 
     mbs = profilable_iterative()
