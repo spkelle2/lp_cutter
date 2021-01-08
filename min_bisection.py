@@ -224,6 +224,7 @@ class MinBisect:
             retval = func(self, *args, **kwargs)
             total_cpu_time = time.process_time() - solve_start
             # sum over sub solve indices for this combination of solve
+            # solve_id, solve_type, method, warm_start, sub_solve_id
             gurobi_cpu_time = sum(d['cpu_time'] for (si, st, m, ws, ssi), d
                                   in self.data.run_stats.items() if
                                   self.solve_type == st and self.method == m and
@@ -294,7 +295,7 @@ class MinBisect:
             self._add_triangle_inequality(i, j, k, t)
 
         self._optimize()
-        assert self.mdl.status == gu.GRB.OPTIMAL, 'small initial solve should make solution'
+        assert self.mdl.status == gu.GRB.OPTIMAL, 'once solve should have solution'
 
     def _recalibrate_cut_depths(self):
         """find how much each constraint is violated. don't worry about

@@ -66,7 +66,7 @@ if __name__ == '__main__':
         'ns': [int(n) for n in sys.argv[2:]],
         'ps': [.5, .8],
         'qs': [.1, .2],
-        'numbers_of_cuts': [10, 30, 100, 300, 1000, 3000, 10000],
+        'numbers_of_cuts': [3000, 10000, 30000, 100000, 300000],
         'min_orders': [0, 1, 2, 3],
         'repeats': 5,
         'fldr': sys.argv[1]
