@@ -16,4 +16,4 @@ python3 runner.py {base_name}_{n} {n}"""
 
 
 if __name__ == '__main__':
-    make_pbs_files(range(10, 110, 10), 'random')
+    make_pbs_files(range(10, 210, 10), 'big_random')
