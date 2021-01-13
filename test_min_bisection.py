@@ -75,7 +75,7 @@ class TestCreateConstraintIndices(unittest.TestCase):
                             self.assertTrue(((i, j, k), t) in c,
                                             f'i={i}, j={j}, k={k}, t={t} belongs in c')
                             good_idx.add(((i, j, k), t))
-        self.assertFalse(set(c.keys()).difference(good_idx),
+        self.assertFalse(c.difference(good_idx),
                          'there should not be any more indices')
 
 
@@ -105,16 +105,16 @@ class TestMinBisection(unittest.TestCase):
         self.assertRaises(AssertionError, MinBisect, 8, .5, .1)
         self.assertRaises(AssertionError, MinBisect, 8, .5, .1, .1, 10)
         self.assertRaises(AssertionError, MinBisect, 7, .5, .1, .1)
-        self.assertRaises(AssertionError, MinBisect, 7, 2, .1, .1)
-        self.assertRaises(AssertionError, MinBisect, 7, .5, -1, .1)
-        self.assertRaises(AssertionError, MinBisect, 7, .5, .1, 10)
-        self.assertRaises(AssertionError, MinBisect, 7, .5, .1, None, .1)
-        self.assertRaises(AssertionError, MinBisect, 7, .5, .1, None, 10, 0, 2)
-        self.assertRaises(AssertionError, MinBisect, 7, .5, .1, None, 10, 0, .001,
+        self.assertRaises(AssertionError, MinBisect, 8, 2, .1, .1)
+        self.assertRaises(AssertionError, MinBisect, 8, .5, -1, .1)
+        self.assertRaises(AssertionError, MinBisect, 8, .5, .1, 10)
+        self.assertRaises(AssertionError, MinBisect, 8, .5, .1, None, .1)
+        self.assertRaises(AssertionError, MinBisect, 8, .5, .1, None, 10, 0, 2)
+        self.assertRaises(AssertionError, MinBisect, 8, .5, .1, None, 10, 0, .001,
                           'yes')
-        self.assertRaises(AssertionError, MinBisect, 7, .5, .1, None, 10, 0, .001,
+        self.assertRaises(AssertionError, MinBisect, 8, .5, .1, None, 10, 0, .001,
                           0, '', 'True')
-        self.assertRaises(AssertionError, MinBisect, 7, .5, .1, None, 10, 0, .001,
+        self.assertRaises(AssertionError, MinBisect, 8, .5, .1, None, 10, 0, .001,
                           0, '', True, -1)
 
     def test_file_combo(self):
@@ -158,7 +158,7 @@ class TestMinBisection(unittest.TestCase):
         mb = MinBisect(8, .5, .1, .1, log_to_console=1, log_file_base='guy')
         mb.warm_start = True
         mb.solve_type = 'once'
-        mb._instantiate_model('auto')
+        mb._instantiate_model(method='auto')
 
         self.assertRaises(AssertionError, mb._instantiate_model, 'dog')
         self.assertTrue(mb.method == 'auto')
@@ -168,24 +168,72 @@ class TestMinBisection(unittest.TestCase):
 
     def test_instantiate_model_constraints(self):
         mb = MinBisect(8, .5, .1, cut_proportion=.1)
-        mb.solve_type = 'iterative'
-        mb._instantiate_model()
+        mb._instantiate_model('iterative')
         self.assertTrue(mb.cut_size == int(.1 * len(mb.c)))
 
         mb = MinBisect(8, .5, .1, number_of_cuts=10)
-        mb.solve_type = 'iterative'
-        mb._instantiate_model()
+        mb._instantiate_model('iterative')
         self.assertTrue(mb.cut_size == 10)
 
         mb = MinBisect(8, .5, .1, cut_proportion=.1)
-        mb.solve_type = 'once'
-        mb._instantiate_model()
+        mb._instantiate_model('once')
         self.assertTrue(mb.cut_size == len(mb.c))
+
+    def test_instantiate_model_search_proportions(self):
+        # 14 gives us 1456 total constraints which will test that .1 gets added
+        # to possible filter sizes to use
+        mb = MinBisect(14, .5, .1, cut_proportion=.1)
+        mb._instantiate_model('iterative', min_search_proportion=.001)
+        self.assertTrue(mb.search_proportions == [.1, 1])
+
+        mb = MinBisect(14, .5, .1, number_of_cuts=10)
+        mb._instantiate_model('iterative', min_search_proportion=.001)
+        self.assertTrue(mb.search_proportions == [.01, .1, 1],
+                        '.001 shouldnt be selected since 10*1000 > 1456')
+
+        mb._instantiate_model('iterative', min_search_proportion=.1)
+        self.assertTrue(mb.search_proportions == [.1, 1])
+
+        mb._instantiate_model('iterative')
+        self.assertTrue(mb.search_proportions == [1])
+
+    def test_instantiate_model_sets_up_min_bisect(self):
+        mb = MinBisect(8, .5, .1, number_of_cuts=100)
+        mb._instantiate_model(solve_type='iterative', warm_start=True, method='dual',
+                              min_search_proportion=1, threshold_proportion=None)
+
+        self.assertTrue(mb.solve_type == 'iterative')
+        self.assertTrue(mb.warm_start)
+        self.assertTrue(mb.method == 'dual')
+        self.assertTrue(mb.min_search_proportion == 1)
+        self.assertIsInstance(mb.c, set)
+        self.assertTrue(mb.sub_solve_id == -1)
+
+    def test_instantiate_model_passes_asserts(self):
+        mb = MinBisect(8, .5, .1, number_of_cuts=100)
+        self.assertRaises(AssertionError, mb._instantiate_model,
+                          solve_type='something_else', warm_start=True, method='dual',
+                          min_search_proportion=1, threshold_proportion=None)
+        self.assertRaises(AssertionError, mb._instantiate_model,
+                          solve_type='iterative', warm_start='True', method='dual',
+                          min_search_proportion=1, threshold_proportion=None)
+        self.assertRaises(AssertionError, mb._instantiate_model,
+                          solve_type='iterative', warm_start=True, method='dual',
+                          min_search_proportion=2, threshold_proportion=None)
+        self.assertRaises(AssertionError, mb._instantiate_model,
+                          solve_type='iterative', warm_start=True, method='dual',
+                          min_search_proportion=1, threshold_proportion=2)
+        self.assertRaises(AssertionError, mb._instantiate_model,
+                          solve_type='iterative', warm_start=True, method='dual',
+                          min_search_proportion=.5, threshold_proportion=.5)
+        self.assertRaises(AssertionError, mb._instantiate_model,
+                          solve_type='iterative', warm_start=True, method='primal',
+                          min_search_proportion=1, threshold_proportion=None)
 
     def test_add_triangle_inequality_adds_constraint_removes_index(self):
         mb = MinBisect(8, .5, .1, .1)
         mb._instantiate_model()
-        ((i, j, k), t) = [k for k in mb.c.keys()][0]
+        ((i, j, k), t) = list(mb.c)[0]
         mb._add_triangle_inequality(i, j, k, t)
         mb.mdl.update()
 
@@ -199,7 +247,7 @@ class TestMinBisection(unittest.TestCase):
         for t in range(1, 5):
             mb = MinBisect(8, .5, .1, .1)
             mb._instantiate_model()
-            ((i, j, k), t) = [k for k in mb.c.keys() if k[1] == t][0]
+            ((i, j, k), t) = [k for k in mb.c if k[1] == t][0]
             mb._add_triangle_inequality(i, j, k, t)
             mb.mdl.update()
             c = mb.mdl.getConstrByName(f'{i}_{j}_{k}_tri{t}')
@@ -238,35 +286,38 @@ class TestMinBisection(unittest.TestCase):
             self.assertRaises(AssertionError, mb._add_triangle_inequality, 1, 2, 3, t)
 
     def test_summary_profile(self):
-        mb = MinBisect(20, .5, .1, .1)
-        mb.solve_once()
-        self.assertTrue([(0, 'once', 'dual', 'cold')] == list(mb.data.summary_stats.keys()))
-        mb.solve_iteratively()
-        self.assertTrue([(0, 'once', 'dual', 'cold'), (0, 'iterative', 'dual', 'warm')]
+        mb = MinBisect(30, .5, .1, number_of_cuts=100)
+        mb.solve_once('dual')
+        self.assertTrue([(0, 'once', 'dual', 'cold', 1, None)] == list(mb.data.summary_stats.keys()))
+        mb.solve_iteratively(min_search_proportion=.1)
+        self.assertTrue([(0, 'once', 'dual', 'cold', 1, None),
+                         (0, 'iterative', 'dual', 'warm', .1, None)]
                         == list(mb.data.summary_stats.keys()))
         max_constraints = mb.mdl.NumConstrs
         max_variables = mb.mdl.NumVars
 
-        # make a few runs so run time calcs are correct
+        # make a few runs so we can test if gurobi run time calcs are correct
         mb.solve_iteratively(warm_start=False)
         mb.solve_once(method='auto')
         mb.solve_iteratively(method='auto')
         mb.solve_iteratively(warm_start=False, method='auto')
         self.assertTrue(solution_schema.good_tic_dat_object(mb.data))
 
-        data = mb.data.summary_stats[0, 'iterative', 'dual', 'warm']
-        self.assertTrue(data['n'] == 20)
+        data = mb.data.summary_stats[0, 'iterative', 'dual', 'warm', .1, None]
+        self.assertTrue(data['n'] == 30)
         self.assertTrue(data['p'] == .5)
         self.assertTrue(data['q'] == .1)
-        self.assertTrue(data['cut_type'] == 'proportion')
-        self.assertTrue(data['cut_value'] == .1)
+        self.assertTrue(data['cut_type'] == 'fixed')
+        self.assertTrue(data['cut_value'] == 100)
         self.assertTrue(data['max_constraints'] == max_constraints)
         self.assertTrue(data['max_variables'] == max_variables)
         self.assertTrue(data['total_cpu_time'] >= data['gurobi_cpu_time'])
         self.assertTrue(data['total_cpu_time'] >= data['non_gurobi_cpu_time'])
-        gurobi_cpu_time = sum(d['cpu_time'] for (si, st, m, ws, ssi), d in
-                              mb.data.run_stats.items() if st == 'iterative'
-                              and m == 'dual' and ws == 'warm')
+        gurobi_cpu_time = sum(
+            d['cpu_time'] for (si, st, m, ws, msp, tp, ssi), d in
+            mb.data.run_stats.items() if st == 'iterative' and m == 'dual' and
+            ws == 'warm' and msp == .1 and tp == None
+        )
         self.assertTrue(data['gurobi_cpu_time'] == gurobi_cpu_time)
         self.assertTrue(data['total_cpu_time'] == data['gurobi_cpu_time'] + data['non_gurobi_cpu_time'])
         # compares different runs but they should all be same anyways
@@ -283,32 +334,30 @@ class TestMinBisection(unittest.TestCase):
 
     def test_optimize(self):
         mb = MinBisect(8, .5, .1, .1, write_mps=True)
-        mb.solve_type = 'iterative'
-        mb.warm_start = True
         mb._instantiate_model()
         mb._optimize()
-        self.assertTrue([(0, 'iterative', 'dual', 'warm', 0)] ==
+        self.assertTrue([(0, 'iterative', 'dual', 'warm', 1, None, 0)] ==
                         list(mb.data.run_stats.keys()))
 
         # tests adds a second correctly
-        ((i, j, k), t) = [k for k in mb.c.keys()][0]
+        ((i, j, k), t) = list(mb.c)[0]
         mb.inf = [((i, j, k), t)]
         mb._add_triangle_inequality(i, j, k, t)
         mb._optimize()
-        self.assertTrue([(0, 'iterative', 'dual', 'warm', 0),
-                         (0, 'iterative', 'dual', 'warm', 1)]
+        self.assertTrue([(0, 'iterative', 'dual', 'warm', 1, None, 0),
+                         (0, 'iterative', 'dual', 'warm', 1, None, 1)]
                         == list(mb.data.run_stats.keys()))
 
         # tests adds all at once solve correctly
-        mb.solve_once()
-        self.assertTrue([(0, 'iterative', 'dual', 'warm', 0),
-                         (0, 'iterative', 'dual', 'warm', 1),
-                         (0, 'once', 'dual', 'cold', 0)] ==
+        mb.solve_once(method='dual')
+        self.assertTrue([(0, 'iterative', 'dual', 'warm', 1, None, 0),
+                         (0, 'iterative', 'dual', 'warm', 1, None, 1),
+                         (0, 'once', 'dual', 'cold', 1, None, 0)] ==
                         list(mb.data.run_stats.keys()))
         self.assertTrue(solution_schema.good_tic_dat_object(mb.data))
 
         # check data filled out as expected
-        data = mb.data.run_stats[0, 'iterative', 'dual', 'warm', 1]
+        data = mb.data.run_stats[0, 'iterative', 'dual', 'warm', 1, None, 1]
         self.assertTrue(data['n'] == 8)
         self.assertTrue(data['p'] == .5)
         self.assertTrue(data['q'] == .1)
@@ -319,6 +368,8 @@ class TestMinBisection(unittest.TestCase):
         self.assertTrue(data['constraints'] == 2)  # because equal partition and 1 cut
         self.assertTrue(data['variables'] == mb.mdl.NumVars)
         self.assertTrue(data['cpu_time'] >= 0)
+        self.assertTrue(data['search_proportion_used'] == 1)
+        self.assertTrue(data['current_threshold'] is None)
 
         # check mps files created
         for pth in ['model_iterative_dual_warm_0.mps',
@@ -326,20 +377,34 @@ class TestMinBisection(unittest.TestCase):
             self.assertTrue(os.path.exists(pth))
             os.remove(pth)
 
+    def test_optimize_captures_correct_cuts(self):
+        mb = MinBisect(20, .5, .1, number_of_cuts=10)
+        mb.solve_iteratively()
+
+        # first iteration should match the fixed number provided
+        data = mb.data.run_stats[0, 'iterative', 'dual', 'warm', 1, None, 0]
+        self.assertTrue(data['cuts_added'] == 100)
+        self.assertTrue(data['cuts_sought'] == 100)
+
+        # second iteration should match number of cuts
+        data = mb.data.run_stats[0, 'iterative', 'dual', 'warm', 1, None, 1]
+        self.assertTrue(data['cuts_added'] == 10)
+        self.assertTrue(data['cuts_sought'] == 10)
+
     def test_optimize_cut_math_right(self):
         mb = MinBisect(8, .5, .1, number_of_cuts=10)
         mb.first_iteration_cuts = 20
-        mb.solve_once()
+        mb.solve_once(method='dual')
         mb.solve_iteratively()
         d = mb.data.run_stats
-        self.assertTrue(d[0, 'iterative', 'dual', 'warm', 0]['cuts_sought'] ==
-                        d[0, 'iterative', 'dual', 'warm', 0]['cuts_added'],
+        self.assertTrue(d[0, 'iterative', 'dual', 'warm', 1, None, 0]['cuts_sought'] ==
+                        d[0, 'iterative', 'dual', 'warm', 1, None, 0]['cuts_added'],
                         'cuts sought and added should be same on first iteration')
-        self.assertTrue(d[0, 'iterative', 'dual', 'warm', 0]['cuts_sought'] > 10,
+        self.assertTrue(d[0, 'iterative', 'dual', 'warm', 1, None, 0]['cuts_sought'] == 20,
                         'cuts first sought should be more than other iterations')
-        self.assertTrue(d[0, 'once', 'dual', 'cold', 0]['cuts_sought'] ==
-                        d[0, 'once', 'dual', 'cold', 0]['cuts_added'] == 224)
-        self.assertTrue(d[0, 'iterative', 'dual', 'warm', 1]['cuts_sought'] == 10)
+        self.assertTrue(d[0, 'once', 'dual', 'cold', 1, None, 0]['cuts_sought'] ==
+                        d[0, 'once', 'dual', 'cold', 1, None, 0]['cuts_added'] == 224)
+        self.assertTrue(d[0, 'iterative', 'dual', 'warm', 1, None, 1]['cuts_sought'] == 10)
 
     def test_solve_once(self):
         a = np.array([[0, 1, 0, 1, 0, 0, 0, 0],
@@ -363,26 +428,54 @@ class TestMinBisection(unittest.TestCase):
         self.assertFalse(mb.c, 'all cuts should have been added')
 
     def test_solve_iteratively_matches_solve_once_small(self):
-        mb = MinBisect(8, .5, .1, .1)
+        mb = MinBisect(8, .5, .1, number_of_cuts=10)
         mb.solve_once()
         once_obj = mb.mdl.ObjVal
         mb.solve_iteratively()
         self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
-        self.assertTrue(mb.solve_type == 'iterative')
-        mb.solve_iteratively(warm_start=False)
-        self.assertFalse(mb.warm_start)
-        self.assertRaises(AssertionError, mb.solve_iteratively, 'True')
+
+        mb.solve_iteratively(min_search_proportion=.001)
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+                        f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
+
+        mb.solve_iteratively(threshold_proportion=.5)
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+                        f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
+
+        mb.solve_iteratively(threshold_proportion=.1)
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+                        f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
+
+        mb.solve_iteratively(threshold_proportion=.9)
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+                        f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
     def test_solve_iteratively_matches_solve_once_big(self):
-        mb = MinBisect(40, .5, .1, .1)
+        mb = MinBisect(40, .5, .1, number_of_cuts=100)
         mb.solve_once()
         once_obj = mb.mdl.ObjVal
         mb.solve_iteratively()
         self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
-    def test_recalibrate_cut_depths(self):
+        mb.solve_iteratively(min_search_proportion=.001)
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+                        f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
+
+        mb.solve_iteratively(threshold_proportion=.5)
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+                        f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
+
+        mb.solve_iteratively(threshold_proportion=.1)
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+                        f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
+
+        mb.solve_iteratively(threshold_proportion=.9)
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+                        f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
+
+    def test_get_cut_depth(self):
         a = np.array([[0, 1, 0, 1],
                       [1, 0, 1, 0],
                       [0, 1, 0, 1],
@@ -390,57 +483,124 @@ class TestMinBisection(unittest.TestCase):
         mb = MinBisect(4, .8, .5, .1)
         mb.a = a
 
-        mb.solve_type = 'iterative'
-        mb._instantiate_model()
+        mb._instantiate_model('iterative')
         mb.mdl.optimize()
-        mb._recalibrate_cut_depths()
+        # makes sure that the cut calc is right
         for (i, j, k) in {(i, j, k) for ((i, j, k), t) in mb.c}:
-            self.assertTrue(mb.c[(i, j, k), 1] == mb.x[j, k].x - mb.x[i, j].x - mb.x[i, k].x)
-            self.assertTrue(mb.c[(i, j, k), 2] == mb.x[i, k].x - mb.x[i, j].x - mb.x[j, k].x)
-            self.assertTrue(mb.c[(i, j, k), 3] == mb.x[i, j].x - mb.x[i, k].x - mb.x[j, k].x)
-            self.assertTrue(mb.c[(i, j, k), 4] == mb.x[i, j].x + mb.x[i, k].x + mb.x[j, k].x - 2)
+            self.assertTrue(mb._get_cut_depth(i, j, k, 1) ==
+                            mb.x[j, k].x - mb.x[i, j].x - mb.x[i, k].x)
+            self.assertTrue(mb._get_cut_depth(i, j, k, 2) ==
+                            mb.x[i, k].x - mb.x[i, j].x - mb.x[j, k].x)
+            self.assertTrue(mb._get_cut_depth(i, j, k, 3) ==
+                            mb.x[i, j].x - mb.x[i, k].x - mb.x[j, k].x)
+            self.assertTrue(mb._get_cut_depth(i, j, k, 4) ==
+                            mb.x[i, j].x + mb.x[i, k].x + mb.x[j, k].x - 2)
+
+    def test_recalibrate_cut_depths_by_threshold_proportion(self):
+        a = np.array([[0, 1, 0, 1, 0, 0, 0, 0],
+                      [1, 0, 1, 0, 0, 0, 0, 1],
+                      [0, 1, 0, 0, 0, 1, 1, 0],
+                      [1, 0, 0, 0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 1, 1],
+                      [0, 0, 1, 0, 0, 0, 0, 1],
+                      [0, 0, 1, 0, 1, 0, 0, 1],
+                      [0, 1, 0, 0, 1, 1, 1, 0]])
+
+        # test we get cut_size cuts when threshold low enough
+        mb = MinBisect(6, .8, .1, number_of_cuts=10)
+        mb.a = a
+        mb._instantiate_model('iterative')
+        mb._optimize()
+        mb.current_threshold = .9
+        mb._recalibrate_cut_depths_by_threshold_proportion()
+        self.assertTrue(len(mb.d) == 10, 'stop at 10 when more')
+        for ((i, j, k), t), cut_depth in mb.d.items():
+            self.assertTrue(cut_depth > .9)
+            mb._add_triangle_inequality(i, j, k, t)
+        mb._optimize()
+        mb.d = {}
+        mb._recalibrate_cut_depths_by_threshold_proportion()
+        self.assertTrue(len(mb.d) == 2, 'grab what is there when less than 10')
+
+    def test_recalibrate_cut_depths_by_search_proportion(self):
+        a = np.array([[0, 1, 0, 1],
+                      [1, 0, 1, 0],
+                      [0, 1, 0, 1],
+                      [1, 0, 1, 0]])
+
+        # test full proportion
+        mb = MinBisect(4, .8, .5, .1)
+        mb.a = a
+
+        mb._instantiate_model('iterative')
+        mb.mdl.optimize()
+        inf_cuts = {idx for idx, depth in mb.d.items() if depth > mb.tolerance}
+        mb._recalibrate_cut_depths_by_search_proportion()
+        self.assertFalse(inf_cuts.difference(mb.d.keys()))
+        self.assertTrue(len(mb.d) == 2, 'only two constraints should be violated')
+
+        # test search proportion < 1
+        mb = MinBisect(4, .8, .5, .1)
+        mb.a = a
+
+        mb._instantiate_model('iterative')
+        mb.mdl.optimize()
+        mb.current_search_proportion = .1
+        self.assertFalse(inf_cuts.difference(mb.d.keys()))
+        self.assertTrue(len(mb.d) <= 1, 'only 1 constraint should have been looked at')
+
+    def test_recalibrate_cut_depths_by_search_proportion_uses_tolerance(self):
+        mb = MinBisect(4, .5, .1, number_of_cuts=20)
+        mb._instantiate_model('iterative')
+        mb.mdl.update()
+        for (i, j), var in mb.x.items():
+            var.lb = -1
+            mb.mdl.addConstr(mb.x[i, j] == -.00001)
+        mb.mdl.remove(mb.mdl.getConstrByName('equal_partitions'))
+        mb.mdl.optimize()
+
+        mb._recalibrate_cut_depths_by_search_proportion()
+        mb._find_most_violated_constraints()
+        self.assertTrue(len(mb.inf) == 0,
+                        'all cut depths should be < tolerance')
+
+        mb.tolerance = .000001
+        mb._recalibrate_cut_depths_by_search_proportion()
+        mb._find_most_violated_constraints()
+        self.assertTrue(len(mb.inf) == 12,
+                        'only last triangle inequalities should be violated')
 
     def test_find_most_violated_constraints(self):
         # use 100 to ensure we get some values less than 1 to test that sort is right
         mb = MinBisect(52, .5, .1, number_of_cuts=100)
-        mb.solve_type = 'iterative'
-        mb._instantiate_model()
+        mb._instantiate_model('iterative')
         mb.first_iteration_cuts = 5000
-        mb.inf = random.sample(mb.c.keys(), min(mb.first_iteration_cuts, len(mb.c)))
+        mb.inf = random.sample(mb.c, min(mb.first_iteration_cuts, len(mb.c)))
         for ((i, j, k), t) in mb.inf:
             mb._add_triangle_inequality(i, j, k, t)
         mb._optimize()
-        mb._recalibrate_cut_depths()
+        mb._recalibrate_cut_depths_by_search_proportion()
         mb._find_most_violated_constraints()
         self.assertTrue(len(mb.inf) == 100, 'we only add 100 cuts at once')
         for k in random.sample(mb.inf, 20):
-            self.assertTrue(len([_ for _ in mb.c if mb.c[_] > mb.c[k]]) < 100,
+            self.assertTrue(len([_ for _ in mb.d if mb.d[_] > mb.d[k]]) < 100,
                             'there should be fewer than 100 constraints more violated')
 
+        # make sure it just returns d.keys() if number of cuts is huge
+        mb.cut_size = 10000000
+        mb._find_most_violated_constraints()
+        self.assertFalse(set(mb.inf).difference(set(mb.d.keys())))
+
     def test_find_most_violated_constraints_when_it_selects_all(self):
-        mb = MinBisect(4, .5, .1, number_of_cuts=20)
+        mb = MinBisect(20, .5, .1, number_of_cuts=5000)
         mb.solve_type = 'iterative'
         mb._instantiate_model()
         mb._optimize()
-        mb._recalibrate_cut_depths()
+        mb._recalibrate_cut_depths_by_search_proportion()
         mb._find_most_violated_constraints()
-        self.assertTrue(len(mb.inf) == len([k for k in mb.c if mb.c[k] == 1]),
+        # when using only cardinality constraint, 1 is only positive cut value
+        self.assertTrue(len(mb.inf) == len([k for k in mb.d if mb.d[k] == 1]),
                         'select all infeasible cuts when total less than sought')
-
-    def test_find_most_violated_constraints_uses_tolerance(self):
-        n = 4
-        indices = range(n)
-        c = {((i, j, k), idx): 10**(-j) for i in indices for j in indices[i + 1:]
-             for k in indices[j + 1:] for idx in [1, 2, 3, 4]}
-        mb = MinBisect(n, .5, .1, number_of_cuts=20)
-        mb.c = c
-        mb._find_most_violated_constraints()
-        self.assertTrue(len(mb.inf) == 16)
-
-        mb = MinBisect(n, .5, .1, number_of_cuts=20, tolerance=.05)
-        mb.c = c
-        mb._find_most_violated_constraints()
-        self.assertTrue(len(mb.inf) == 8)
 
     @patch('min_bisection.gu.Model.reset')
     def test_solve_iteratively_cold(self, reset_patch):
