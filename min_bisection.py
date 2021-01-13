@@ -5,6 +5,7 @@ import random
 from ticdat import TicDatFactory
 import time
 
+# headers for our output files
 solution_schema = TicDatFactory(
     run_stats=[['solve_id', 'solve_type', 'method', 'warm_start',
                 'min_search_proportion', 'threshold_proportion', 'sub_solve_id'],
@@ -30,6 +31,7 @@ def create_adjacency_matrix(n, p, q):
     node in another cluster.
     :return a: 2-D array where a[i,j]=1 if edge exists between i and j, else 0
     """
+
     np.random.seed()  # sets new seed based on OS clock
     indices = range(n)
 
@@ -70,8 +72,7 @@ class MinBisect:
     def __init__(self, n, p, q, cut_proportion=None, number_of_cuts=None,
                  solve_id=0, tolerance=.0001, log_to_console=0, log_file_base='',
                  write_mps=False, first_iteration_cuts=100):
-        """Create our adjacency matrix and constraint indexes and declare all
-        other needed attributes
+        """Create our adjacency matrix and declare all other needed attributes
 
         :param n: size of our adjacency matrix (n x n)
         :param p: likelihood of edge within cluster
@@ -155,8 +156,8 @@ class MinBisect:
                            method='dual', min_search_proportion=1,
                            threshold_proportion=None):
         """Does everything that solving iteratively and at once will share, e.g.
-        instantiating the model and variables as well as setting the objective
-        and equal partition constraint.
+        instantiating the model object and variables as well as setting the
+        objective and equal partition constraint.
 
         :param solve_type: whether this is an 'iterative' or 'once' solve
         :param warm_start: Set to True to use the previous iteration's optimal
@@ -227,7 +228,7 @@ class MinBisect:
         :param i: ith index
         :param j: jth index
         :param k: kth index
-        :param t: what type of constraint is this
+        :param t: whether this is constraint type 1, 2, 3, 4
         :return:
         """
         assert t in [1, 2, 3, 4], 'constraint type should be 1, 2, 3, or 4'
@@ -250,6 +251,11 @@ class MinBisect:
         self.c.remove(((i, j, k), t))
 
     def _summary_profile(func):
+        """A decorator that is used to collect metadata on once solves
+        and iterative solves
+
+        :return:
+        """
         def wrapper(self, *args, **kwargs):
             solve_start = time.process_time()
             retval = func(self, *args, **kwargs)
@@ -282,6 +288,10 @@ class MinBisect:
         return wrapper
 
     def _optimize(self):
+        """ A function that collects data on each LP solve
+
+        :return:
+        """
         self.sub_solve_id += 1
         if self.write_mps:
             self.mdl.write(f'model_{self.file_combo}_{self.sub_solve_id}.mps')
@@ -474,4 +484,3 @@ if __name__ == '__main__':
 
     # print run stats
     solution_schema.csv.write_directory(mbs[0].data, 'test_results', allow_overwrite=True)
-

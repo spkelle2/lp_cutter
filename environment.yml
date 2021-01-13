@@ -6,6 +6,7 @@ channels:
 dependencies:
   - gurobi
   - pandas
-  - pip
-  - python
-
+  - xlsxwriter
+  - pip:
+    - ticdat
+prefix: C:\Users\seanp\miniconda\envs\lp_cutter
