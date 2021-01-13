@@ -6,15 +6,16 @@ from ticdat import TicDatFactory
 import time
 
 solution_schema = TicDatFactory(
-    run_stats=[['solve_id', 'solve_type', 'method', 'warm_start', 'sub_solve_id'],
+    run_stats=[['solve_id', 'solve_type', 'method', 'warm_start',
+                'min_search_proportion', 'threshold_proportion', 'sub_solve_id'],
                ['n', 'p', 'q', 'cut_type', 'cut_value', 'cuts_sought',
-                'cuts_added', 'min_order', 'min_proportion', 'proportion_used',
+                'cuts_added', 'search_proportion_used', 'current_threshold',
                 'variables', 'constraints', 'cpu_time']],
-    summary_stats=[['solve_id', 'solve_type', 'method', 'warm_start'],
-                   ['n', 'p', 'q', 'cut_type', 'cut_value', 'min_order',
-                    'min_proportion', 'max_variables', 'max_constraints',
-                    'total_cpu_time', 'gurobi_cpu_time', 'non_gurobi_cpu_time',
-                    'objective_value']]
+    summary_stats=[['solve_id', 'solve_type', 'method', 'warm_start',
+                    'min_search_proportion', 'threshold_proportion'],
+                   ['n', 'p', 'q', 'cut_type', 'cut_value', 'max_variables',
+                    'max_constraints', 'total_cpu_time', 'gurobi_cpu_time',
+                    'non_gurobi_cpu_time', 'objective_value']]
 )
 
 
@@ -68,7 +69,7 @@ class MinBisect:
 
     def __init__(self, n, p, q, cut_proportion=None, number_of_cuts=None,
                  solve_id=0, tolerance=.0001, log_to_console=0, log_file_base='',
-                 write_mps=False, first_iteration_cuts=100, min_order=0):
+                 write_mps=False, first_iteration_cuts=100):
         """Create our adjacency matrix and constraint indexes and declare all
         other needed attributes
 
@@ -90,9 +91,7 @@ class MinBisect:
         :param write_mps: whether or not to write out the .mps file for this experiment
         :param first_iteration_cuts: number of cuts to add to the first solve
         when solving iteratively
-        :param min_order: how many orders of magnitude larger must the smallest
-        set of constraints to search for violations be relative to how many cuts
-        we intend to add at once.
+
         :return:
         """
         assert n % 2 == 0, 'n needs to be even'
@@ -106,7 +105,6 @@ class MinBisect:
         assert log_to_console in [0, 1], 'gurobi requires log to console flag either 0 or 1'
         assert isinstance(write_mps, bool), 'write_mps must be boolean'
         assert isinstance(first_iteration_cuts, int) and first_iteration_cuts >= 0
-        assert isinstance(min_order, int) and min_order >= 0
 
         self.n = n
         self.p = p
@@ -116,12 +114,12 @@ class MinBisect:
         self.log_to_console = log_to_console
         self.log_file_base = log_file_base
         self.write_mps = write_mps
+        self.first_iteration_cuts = first_iteration_cuts
 
         self.indices = range(n)
         self.a = create_adjacency_matrix(n, p, q)
         self.c = None  # available cuts
         self.d = {}  # cut depths
-        self.proportion = 1  # proportion of cuts to search
         self.cut_type = 'proportion' if cut_proportion else 'fixed'
         self.cut_value = cut_proportion if cut_proportion else number_of_cuts
         self.cut_size = None
@@ -133,11 +131,16 @@ class MinBisect:
         self.data = solution_schema.TicDat()
         self.solve_type = None
         self.inf = []
-        self.first_iteration_cuts = first_iteration_cuts
         self.method = None
+
+        # to be assigned at _instantiate_model
         self.warm_start = None
         self.search_proportions = None
-        self.min_order = min_order
+        self.current_search_proportion = None
+        self.min_search_proportion = None
+        self.threshold_proportion = None
+        self.current_threshold = None
+
 
     @property
     def file_combo(self):
@@ -148,18 +151,43 @@ class MinBisect:
     def warm_str(self):
         return 'warm' if self.warm_start else 'cold'
 
-    def _instantiate_model(self, method='dual'):
+    def _instantiate_model(self, solve_type='iterative', warm_start=True,
+                           method='dual', min_search_proportion=1,
+                           threshold_proportion=None):
         """Does everything that solving iteratively and at once will share, e.g.
         instantiating the model and variables as well as setting the objective
         and equal partition constraint.
 
+        :param solve_type: whether this is an 'iterative' or 'once' solve
+        :param warm_start: Set to True to use the previous iteration's optimal
+        basis as the initial basis for the current. Intended to be used in
+        conjunction with solve_method='dual'
         :param method: 'dual' to solve each iteration with dual simplex,
         'auto' to let gurobi decide which solve method is best
+        :param min_search_proportion: smallest proportion of available cuts to search
+        for deepest cuts to add to the model when solving iteratively. Note,
+        search_proportions are inverse powers of 10, so this parameter will be rounded
+        up to the next largest inverse power of 10. For example, .02 becomes .1.
+        :param threshold_proportion: if in (0, 1), what proportion of current infeasible
+        cuts must a cut be deeper than to be added to the model when solved iteratively
+
+        Note: it is intended for the user to use at most one of min_search_proportion
+        and threshold_proportion as they are not designed to be used at the same time.
 
         :return:
         """
+        # solve specific MinBisect instantiation
+        assert solve_type in ['iterative', 'once']
+        assert isinstance(warm_start, bool)
         assert method in ['dual', 'auto'], 'solve with dual or let gurobi decide'
+        assert 0 < min_search_proportion <= 1
+        assert threshold_proportion is None or (0 < threshold_proportion < 1)
+        assert min_search_proportion == 1 or threshold_proportion is None, 'not both'
 
+        self.solve_type = solve_type
+        self.warm_start = warm_start
+        self.min_search_proportion = min_search_proportion
+        self.threshold_proportion = threshold_proportion
         self.method = method
         self.c = create_constraint_indices(self.indices)
         self.sub_solve_id = -1
@@ -168,7 +196,9 @@ class MinBisect:
             else self.cut_value
         self.search_proportions = [
             10**x for x in range(ceil(np.log10(self.cut_size/len(self.c))), 0)
-        ][self.min_order:] + [1]
+            if 10**x >= self.min_search_proportion
+        ] + [1]
+        self.current_search_proportion = 1
 
         # model
         self.mdl = gu.Model("min bisection")
@@ -197,7 +227,7 @@ class MinBisect:
         :param i: ith index
         :param j: jth index
         :param k: kth index
-        :param t: whether this is constraint type 1 or 2
+        :param t: what type of constraint is this
         :return:
         """
         assert t in [1, 2, 3, 4], 'constraint type should be 1, 2, 3, or 4'
@@ -226,19 +256,20 @@ class MinBisect:
             total_cpu_time = time.process_time() - solve_start
             # sum over sub solve indices for this combination of solve
             # solve_id, solve_type, method, warm_start, sub_solve_id
-            gurobi_cpu_time = sum(d['cpu_time'] for (si, st, m, ws, ssi), d
-                                  in self.data.run_stats.items() if
-                                  self.solve_type == st and self.method == m and
-                                  self.warm_str == ws)
+            gurobi_cpu_time = sum(
+                d['cpu_time'] for (si, st, m, ws, msp, tp, ssi), d in
+                self.data.run_stats.items() if self.solve_type == st and
+                self.method == m and self.warm_str == ws and
+                self.min_search_proportion == msp and self.threshold_proportion == tp
+            )
             self.data.summary_stats[self.solve_id, self.solve_type, self.method,
-                                    self.warm_str] = {
+                                    self.warm_str, self.min_search_proportion,
+                                    self.threshold_proportion] = {
                 'n': self.n,
                 'p': self.p,
                 'q': self.q,
                 'cut_type': self.cut_type,
                 'cut_value': self.cut_value,
-                'min_order': self.min_order,
-                'min_proportion': min(self.search_proportions),
                 'max_constraints': self.mdl.NumConstrs,
                 'max_variables': self.mdl.NumVars,
                 'total_cpu_time': total_cpu_time,
@@ -260,18 +291,18 @@ class MinBisect:
         self.constraints = self.mdl.NumConstrs
         self.variables = self.mdl.NumVars
         self.data.run_stats[self.solve_id, self.solve_type, self.method,
-                            self.warm_str, self.sub_solve_id] = {
+                            self.warm_str, self.min_search_proportion,
+                            self.threshold_proportion, self.sub_solve_id] = {
             'n': self.n,
             'p': self.p,
             'q': self.q,
             'cut_type': self.cut_type,
             'cut_value': self.cut_value,
             'cuts_sought': len(self.inf) if self.solve_type == 'iterative' and
-                           self.sub_solve_id == 0 else self.cut_size,
+                self.sub_solve_id == 0 else self.cut_size,
             'cuts_added': len(self.inf) if self.solve_type == 'iterative' else self.cut_size,
-            'min_order': self.min_order,
-            'min_proportion': min(self.search_proportions),
-            'proportion_used': self.proportion,
+            'search_proportion_used': self.current_search_proportion,
+            'current_threshold': self.current_threshold,
             'constraints': self.mdl.NumConstrs,
             'variables': self.mdl.NumVars,
             'cpu_time': sub_solve_cpu_time
@@ -279,17 +310,12 @@ class MinBisect:
 
     @_summary_profile
     def solve_once(self, method='auto'):
-        """Solves the model with all constraints added at once
-
-        :param method: 'dual' to solve the model with dual simplex,
-        'auto' to let gurobi decide which solve method is best
+        """Solves the model with all constraints added at once. For parameter
+        explanation, see MinBisect._instantiate_model
 
         :return:
         """
-        self.solve_type = 'once'
-        self.warm_start = False
-        self.proportion = 1
-        self._instantiate_model(method)
+        self._instantiate_model('once', False, method)
 
         # make new object so loop not thrown off by deletion
         for ((i, j, k), t) in list(self.c):
@@ -298,9 +324,30 @@ class MinBisect:
         self._optimize()
         assert self.mdl.status == gu.GRB.OPTIMAL, 'once solve should have solution'
 
-    def _recalibrate_cut_depths(self):
+    def _get_cut_depth(self, i, j, k, t):
         """find how much each constraint is violated. don't worry about
         normalizing since each vector has the same norm
+
+        :param i: ith index
+        :param j: jth index
+        :param k: kth index
+        :param t: what type of constraint is this
+        :return: depth of the cut
+        """
+        if t == 1:
+            return self.x[j, k].x - self.x[i, j].x - self.x[i, k].x
+        elif t == 2:
+            return self.x[i, k].x - self.x[i, j].x - self.x[j, k].x
+        elif t == 3:
+            return self.x[i, j].x - self.x[i, k].x - self.x[j, k].x
+        else:  # t == 4:
+            return self.x[i, j].x + self.x[i, k].x + self.x[j, k].x - 2
+
+    def _recalibrate_cut_depths_by_threshold_proportion(self):
+        """Find the first <self.cut_size> unsatisfied constraints that are
+        violated by more than <self.current_threshold>, stopping once they have
+        been found. Returns all constraints violated by more than <self.current_threshold>
+        if less than <self.cut_size> such constraints are found
 
         for a constraint to be satisfied, its key should have a corresponding
         value <= 0. Changing this such that the value <= tolerance allows constraints
@@ -308,16 +355,25 @@ class MinBisect:
 
         :return:
         """
-        for ((i, j, k), t) in random.sample(self.c, int(self.proportion*len(self.c)))\
-                if self.proportion < 1 else self.c:
-            if t == 1:
-                cut_depth = self.x[j, k].x - self.x[i, j].x - self.x[i, k].x
-            elif t == 2:
-                cut_depth = self.x[i, k].x - self.x[i, j].x - self.x[j, k].x
-            elif t == 3:
-                cut_depth = self.x[i, j].x - self.x[i, k].x - self.x[j, k].x
-            else:  # t == 4:
-                cut_depth = self.x[i, j].x + self.x[i, k].x + self.x[j, k].x - 2
+        count = 0
+        for ((i, j, k), t) in self.c:
+            cut_depth = self._get_cut_depth(i, j, k, t)
+            if cut_depth >= self.current_threshold:
+                self.d[(i, j, k), t] = cut_depth
+                count += 1
+                if count == self.cut_size:
+                    break
+
+    def _recalibrate_cut_depths_by_search_proportion(self):
+        """From a random subset of <self.search_proportion> of the total
+        remaining constraints, find the <self.cut_size> most unsatisfied that
+        are unsatisfied by more than the tolerance.
+
+        :return:
+        """
+        for ((i, j, k), t) in self.c if self.current_search_proportion == 1 else \
+                random.sample(self.c, int(self.current_search_proportion * len(self.c))):
+            cut_depth = self._get_cut_depth(i, j, k, t)
             if cut_depth > self.tolerance:
                 self.d[(i, j, k), t] = cut_depth
 
@@ -328,26 +384,21 @@ class MinBisect:
 
         :return:
         """
+        if len(self.d) <= self.cut_size:
+            self.inf = list(self.d.keys())
         self.inf = sorted(self.d, key=self.d.get, reverse=True)[:self.cut_size]
 
     @_summary_profile
-    def solve_iteratively(self, warm_start=True, method='dual'):
+    def solve_iteratively(self, warm_start=True, method='dual',
+                          min_search_proportion=1, threshold_proportion=None):
         """Solve the model by feeding in only the top most violated constraints,
-        and repeat until no violated constraints remain
-
-        :param warm_start: Set to True to use the previous iteration's optimal
-        basis as the initial basis for the current. Intended to be used in
-        conjunction with solve_method='dual'
-        :param method: 'dual' to solve each iteration with dual simplex,
-        'auto' to let gurobi decide which solve method is best
+        and repeat until no violated constraints remain. For explanation of the
+        parameters, see MinBisect._instantiate_model
 
         :return:
         """
-        assert isinstance(warm_start, bool)
-
-        self.solve_type = 'iterative'
-        self.warm_start = warm_start
-        self._instantiate_model(method)
+        self._instantiate_model('iterative', warm_start, method,
+                                min_search_proportion, threshold_proportion)
 
         # Add randomly <self.first_iteration_cuts> of the triangle inequality
         # constraints or just all of them if there's less than <self.first_iteration_cuts>
@@ -360,19 +411,35 @@ class MinBisect:
 
         while True:
             self.d = {}
-            for proportion in self.search_proportions:
-                self.proportion = proportion
-                self._recalibrate_cut_depths()
-                self._find_most_violated_constraints()
-                if len(self.inf) == self.cut_size:
+            if self.threshold_proportion:
+                if self.current_threshold:
+                    self._recalibrate_cut_depths_by_threshold_proportion()
+                    self._find_most_violated_constraints()
+                    if len(self.inf) < self.cut_size:
+                        self.current_threshold = None
+                else:
+                    self._recalibrate_cut_depths_by_search_proportion()
+                    self._find_most_violated_constraints()
+                    # only find new threshold if there are at least <cut_size>
+                    # constraints with that depth or more
+                    if self.cut_size < len(self.d)*(1 - self.threshold_proportion):
+                        key = sorted(self.d, key=self.d.get)[
+                            floor(len(self.d) * self.threshold_proportion)]
+                        self.current_threshold = self.d[key]
+                    if not self.inf:
+                        break
+            else:
+                for search_proportion in self.search_proportions:
+                    self.current_search_proportion = search_proportion
+                    self._recalibrate_cut_depths_by_search_proportion()
+                    self._find_most_violated_constraints()
+                    if len(self.inf) == self.cut_size:
+                        break
+                if not self.inf:
                     break
-
-            if not self.inf:
-                break
 
             for ((i, j, k), t) in self.inf:
                 self._add_triangle_inequality(i, j, k, t)
-
             if not warm_start:
                 self.mdl.reset()
             self._optimize()

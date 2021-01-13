@@ -14,7 +14,8 @@ class TestRunExperiments(unittest.TestCase):
     cut_proportions = [.1]
     numbers_of_cuts = [10]
     repeats = 1
-    min_orders = [0, 1]
+    min_search_proportions = [.1, 1]
+    threshold_proportions = [.9]
     fldr = 'test_output'
 
     def tearDown(self):
@@ -22,22 +23,18 @@ class TestRunExperiments(unittest.TestCase):
 
     def test_saves_exactly_all_run_data(self):
         run_experiments(self.ns, self.ps, self.qs, self.cut_proportions,
-                        self.numbers_of_cuts, self.min_orders, self.repeats,
-                        self.fldr)
+                        self.numbers_of_cuts, self.min_search_proportions,
+                        self.threshold_proportions, self.repeats, self.fldr)
         data = solution_schema.csv.create_tic_dat(self.fldr)
 
-        # the three valid combos should each run once and iteratively
-        # min_orders = 1 and cut_proportions = .1 is an invalid combo
+        # 8 possible combos here 2 * (1 + 2 + 1)
+        # when cut_proportion = .1, we should not use threshold_proportion = .9
+        # or min_search_proportion = .1
         self.assertTrue(len(data.summary_stats) == 6)
-        for (cut_value, min_order) in \
-                product(self.cut_proportions + self.numbers_of_cuts, self.min_orders):
-            matches = {pk: f for pk, f in data.summary_stats.items() if
-                       f['cut_value'] == cut_value and f['min_order'] == min_order}
-            if cut_value == .1 and min_order == 1:
-                self.assertFalse(matches)
-            else:
-                self.assertTrue(len(matches) == 2)
-
+        self.assertTrue(len([pk for pk, f in data.summary_stats.items() if
+                             f['cut_value'] == .1]) == 2)
+        self.assertTrue(len([pk for pk, f in data.summary_stats.items() if
+                             f['cut_value'] == 10]) == 4)
 
     def test_works_with_no_proportions(self):
         run_experiments(self.ns, self.ps, self.qs,
