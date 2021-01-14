@@ -1,1 +1,18 @@
-=>> PBS: job killed: vmem 16108027904 exceeded limit 16106127360
+MemoryError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "runner.py", line 74, in <module>
+    run_experiments(**kwargs)
+  File "runner.py", line 57, in run_experiments
+    mb.solve_iteratively(warm_start=True, method='dual')
+  File "/home/sek519/lp_cutter/min_bisection.py", line 225, in wrapper
+    retval = func(self, *args, **kwargs)
+  File "/home/sek519/lp_cutter/min_bisection.py", line 350, in solve_iteratively
+    self._instantiate_model(method)
+  File "/home/sek519/lp_cutter/min_bisection.py", line 164, in _instantiate_model
+    self.c = create_constraint_indices(self.indices)
+  File "/home/sek519/lp_cutter/min_bisection.py", line 62, in create_constraint_indices
+    c = {((i, j, k), idx) for i in indices for j in indices[i + 1:]
+MemoryError

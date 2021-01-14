@@ -1,7 +1,7 @@
 #PBS -N big_random_70
 #PBS -e /home/sek519/lp_cutter/big_random_70.err
 #PBS -o /home/sek519/lp_cutter/big_random_70.out
-#PBS -l nodes=1:ppn=4,mem=10gb,vmem=15gb
+#PBS -l nodes=1:ppn=4,mem=8gb,vmem=12gb
 #PBS -q long
 
 cd /home/sek519/lp_cutter
