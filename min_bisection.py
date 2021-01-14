@@ -457,30 +457,29 @@ class MinBisect:
 
 
 if __name__ == '__main__':
-    # from profiler import profile
+    from profiler import profile
 
-    # @profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
-    def profilable_iterative():
+    @profile(sort_by='tottime', lines_to_print=10, strip_dirs=True)
+    def profilable_random():
         mbs = []
-        for i in range(1):
+        for i in range(40):
             print(f'test {i + 1}')
-            mb = MinBisect(n=80, p=.5, q=.1, number_of_cuts=3000, log_to_console=1,
-                           min_order=2)
+            mb = MinBisect(n=20, p=.5, q=.2, number_of_cuts=10)
             mbs.append(mb)
-            mb.solve_iteratively()
+            mb.solve_iteratively(method='auto', min_search_proportion=1)
         return mbs
 
-    # @profile(sort_by='cumulative', lines_to_print=10, strip_dirs=True)
+    @profile(sort_by='tottime', lines_to_print=10, strip_dirs=True)
     def profilable_once(mbs):
         for i, mb in enumerate(mbs):
             print(f'test {i + 1 + len(mbs)}')
-            mb.solve_once(method='dual')
+            mb.solve_once(method='auto')
             print()
 
-    mbs = profilable_iterative()
-    profilable_once(mbs)
+    mbs = profilable_random()
+    # profilable_once(mbs)
     print()
 
 
     # print run stats
-    solution_schema.csv.write_directory(mbs[0].data, 'test_results', allow_overwrite=True)
+    # solution_schema.csv.write_directory(mbs[0].data, 'test_results', allow_overwrite=True)

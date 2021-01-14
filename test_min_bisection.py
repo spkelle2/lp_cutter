@@ -83,8 +83,8 @@ class TestMinBisection(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if os.path.exists('guy_once_auto.txt'):
-            os.remove('guy_once_auto.txt')
+        if os.path.exists('guy_iterative_auto_warm.txt'):
+            os.remove('guy_iterative_auto_warm.txt')
 
     def test_init(self):
         # proportion
