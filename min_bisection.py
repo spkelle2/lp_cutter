@@ -462,9 +462,9 @@ if __name__ == '__main__':
     @profile(sort_by='tottime', lines_to_print=10, strip_dirs=True)
     def profilable_random():
         mbs = []
-        for i in range(40):
+        for i in range(5):
             print(f'test {i + 1}')
-            mb = MinBisect(n=20, p=.5, q=.2, number_of_cuts=10)
+            mb = MinBisect(n=80, p=.5, q=.2, number_of_cuts=1000)
             mbs.append(mb)
             mb.solve_iteratively(method='auto', min_search_proportion=1)
         return mbs
