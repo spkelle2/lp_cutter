@@ -86,8 +86,8 @@ if __name__ == '__main__':
         'ps': [.5, .8],
         'qs': [.1, .2],
         'numbers_of_cuts': [1000, 10000, 100000, 1000000],
-        'min_search_proportions': [1],
-        'threshold_proportions': [],
+        'min_search_proportions': [.01, .1],
+        'threshold_proportions': [.5, .9],
         'repeats': 5,
         'fldr': sys.argv[1]
     }
