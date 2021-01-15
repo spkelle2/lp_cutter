@@ -519,6 +519,7 @@ class TestMinBisection(unittest.TestCase):
             mb._add_triangle_inequality(i, j, k, t)
         mb._optimize()
         mb.d = {}
+        mb.v = {}
         mb._recalibrate_cut_depths_by_threshold_proportion()
         self.assertTrue(len(mb.d) == 2, 'grab what is there when less than 10')
 

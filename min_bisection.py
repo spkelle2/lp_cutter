@@ -32,7 +32,6 @@ def create_adjacency_matrix(n, p, q):
     :return a: 2-D array where a[i,j]=1 if edge exists between i and j, else 0
     """
 
-    np.random.seed()  # sets new seed based on OS clock
     indices = range(n)
 
     # create our adjacency matrix
@@ -121,6 +120,7 @@ class MinBisect:
         self.a = create_adjacency_matrix(n, p, q)
         self.c = None  # available cuts
         self.d = {}  # cut depths
+        self.v = {}
         self.cut_type = 'proportion' if cut_proportion else 'fixed'
         self.cut_value = cut_proportion if cut_proportion else number_of_cuts
         self.cut_size = None
@@ -344,14 +344,38 @@ class MinBisect:
         :param t: what type of constraint is this
         :return: depth of the cut
         """
+        # try filtering first and also try/except
+        # try functions in different places
+
         if t == 1:
-            return self.x[j, k].x - self.x[i, j].x - self.x[i, k].x
+            try:
+                return self.v[j, k] - self.v[i, j] - self.v[i, k]
+            except KeyError:
+                self._get_vals(i, j, k)
+                return self.v[j, k] - self.v[i, j] - self.v[i, k]
         elif t == 2:
-            return self.x[i, k].x - self.x[i, j].x - self.x[j, k].x
+            try:
+                return self.v[i, k] - self.v[i, j] - self.v[j, k]
+            except KeyError:
+                self._get_vals(i, j, k)
+                return self.v[i, k] - self.v[i, j] - self.v[j, k]
         elif t == 3:
-            return self.x[i, j].x - self.x[i, k].x - self.x[j, k].x
+            try:
+                return self.v[i, j] - self.v[i, k] - self.v[j, k]
+            except KeyError:
+                self._get_vals(i, j, k)
+                return self.v[i, j] - self.v[i, k] - self.v[j, k]
         else:  # t == 4:
-            return self.x[i, j].x + self.x[i, k].x + self.x[j, k].x - 2
+            try:
+                return self.v[i, j] + self.v[i, k] + self.v[j, k] - 2
+            except KeyError:
+                self._get_vals(i, j, k)
+                return self.v[i, j] + self.v[i, k] + self.v[j, k] - 2
+
+    def _get_vals(self, i, j, k):
+        for (a, b) in [(j, k), (i, j), (i, k)]:
+            if (a, b) not in self.v:
+                self.v[a, b] = self.x[a, b].x
 
     def _recalibrate_cut_depths_by_threshold_proportion(self):
         """Find the first <self.cut_size> unsatisfied constraints that are
@@ -421,6 +445,7 @@ class MinBisect:
 
         while True:
             self.d = {}
+            self.v = {}
             if self.threshold_proportion:
                 if self.current_threshold:
                     self._recalibrate_cut_depths_by_threshold_proportion()
