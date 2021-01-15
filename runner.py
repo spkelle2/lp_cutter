@@ -59,14 +59,20 @@ def run_experiments(ns, ps, qs, cut_proportions=None, numbers_of_cuts=None,
         for min_search_proportion in min_search_proportions:
             if cut_size >= min_search_proportion * cuts_possible[mb.n]:
                 continue
+            name = '_'.join([fldr] + [f'{k}={v}' for k, v in combo.items()] +
+                            [f'min_search_proportion={min_search_proportion}_solve_id={i}.prof'])
             mb.solve_iteratively(warm_start=True, method='auto',
-                                 min_search_proportion=min_search_proportion)
+                                 min_search_proportion=min_search_proportion,
+                                 output_file=name)
 
         for threshold_proportion in threshold_proportions:
             if cut_size >= (1 - threshold_proportion) * cuts_possible[mb.n]:
                 continue
+            name = '_'.join([fldr] + [f'{k}={v}' for k, v in combo.items()] +
+                            [f'threshold_proportion={threshold_proportion}_solve_id={i}.prof'])
             mb.solve_iteratively(warm_start=True, method='auto',
-                                 threshold_proportion=threshold_proportion)
+                                 threshold_proportion=threshold_proportion,
+                                 output_file=name)
 
         for t in solution_schema.all_tables:
             for pk, f in getattr(mb.data, t).items():
@@ -77,12 +83,12 @@ def run_experiments(ns, ps, qs, cut_proportions=None, numbers_of_cuts=None,
 if __name__ == '__main__':
     kwargs = {
         'ns': [int(n) for n in sys.argv[2:]],
-        'ps': [.5],
-        'qs': [.1],
-        'numbers_of_cuts': [100],
-        'min_search_proportions': [.1, 1],
-        'threshold_proportions': [.5],
-        'repeats': 1,
+        'ps': [.5, .8],
+        'qs': [.1, .2],
+        'numbers_of_cuts': [1000, 10000, 100000, 1000000],
+        'min_search_proportions': [1],
+        'threshold_proportions': [],
+        'repeats': 5,
         'fldr': sys.argv[1]
     }
     run_experiments(**kwargs)

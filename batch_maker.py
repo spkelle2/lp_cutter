@@ -4,8 +4,8 @@ def make_pbs_files(ns, base_name):
         txt = f"""#PBS -N {base_name}_{n}
 #PBS -e /home/sek519/lp_cutter/{base_name}_{n}.err
 #PBS -o /home/sek519/lp_cutter/{base_name}_{n}.out
-#PBS -l nodes=1:ppn=4,mem=8gb,vmem=12gb
-#PBS -q long
+#PBS -l nodes=1:ppn=4,mem=4gb,vmem=6gb
+#PBS -q {'verylong' if n > 150 else 'long' if n > 50 else 'medium'}
 
 cd /home/sek519/lp_cutter
 source /home/sek519/lp_cutter/env_lpc/bin/activate
@@ -16,4 +16,4 @@ python3 runner.py {base_name}_{n} {n}"""
 
 
 if __name__ == '__main__':
-    make_pbs_files(range(10, 210, 10), 'big_random')
+    make_pbs_files(range(10, 210, 10), 'no_random_pp')

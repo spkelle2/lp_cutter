@@ -1,6 +1,7 @@
 import gurobipy as gu
 from math import ceil, floor
 import numpy as np
+from profiler import profile
 import random
 from ticdat import TicDatFactory
 import time
@@ -423,8 +424,10 @@ class MinBisect:
         self.inf = sorted(self.d, key=self.d.get, reverse=True)[:self.cut_size]
 
     @_summary_profile
+    @profile(sort_by='tottime', lines_to_print=20, strip_dirs=True)
     def solve_iteratively(self, warm_start=True, method='dual',
-                          min_search_proportion=1, threshold_proportion=None):
+                          min_search_proportion=1, threshold_proportion=None,
+                          output_file=None):
         """Solve the model by feeding in only the top most violated constraints,
         and repeat until no violated constraints remain. For explanation of the
         parameters, see MinBisect._instantiate_model
@@ -482,14 +485,13 @@ class MinBisect:
 
 
 if __name__ == '__main__':
-    from profiler import profile
 
     @profile(sort_by='tottime', lines_to_print=10, strip_dirs=True)
     def profilable_random():
         mbs = []
         for i in range(5):
             print(f'test {i + 1}')
-            mb = MinBisect(n=80, p=.5, q=.2, number_of_cuts=1000)
+            mb = MinBisect(n=20, p=.5, q=.2, number_of_cuts=100)
             mbs.append(mb)
             mb.solve_iteratively(method='auto', min_search_proportion=1)
         return mbs
@@ -507,4 +509,4 @@ if __name__ == '__main__':
 
 
     # print run stats
-    # solution_schema.csv.write_directory(mbs[0].data, 'test_results', allow_overwrite=True)
+    solution_schema.csv.write_directory(mbs[0].data, 'test_results', allow_overwrite=True)
