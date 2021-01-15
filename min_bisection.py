@@ -489,7 +489,7 @@ if __name__ == '__main__':
         mbs = []
         for i in range(5):
             print(f'test {i + 1}')
-            mb = MinBisect(n=60, p=.5, q=.2, number_of_cuts=1000)
+            mb = MinBisect(n=80, p=.5, q=.2, number_of_cuts=1000)
             mbs.append(mb)
             mb.solve_iteratively(method='auto', min_search_proportion=1)
         return mbs
