@@ -345,14 +345,38 @@ class MinBisect:
         :param t: what type of constraint is this
         :return: depth of the cut
         """
+        # try filtering first and also try/except
+        # try functions in different places
+
         if t == 1:
-            return self.v[j, k] - self.v[i, j] - self.v[i, k]
+            try:
+                return self.v[j, k] - self.v[i, j] - self.v[i, k]
+            except KeyError:
+                self._get_vals(i, j, k)
+                return self.v[j, k] - self.v[i, j] - self.v[i, k]
         elif t == 2:
-            return self.v[i, k] - self.v[i, j] - self.v[j, k]
+            try:
+                return self.v[i, k] - self.v[i, j] - self.v[j, k]
+            except KeyError:
+                self._get_vals(i, j, k)
+                return self.v[i, k] - self.v[i, j] - self.v[j, k]
         elif t == 3:
-            return self.v[i, j] - self.v[i, k] - self.v[j, k]
+            try:
+                return self.v[i, j] - self.v[i, k] - self.v[j, k]
+            except KeyError:
+                self._get_vals(i, j, k)
+                return self.v[i, j] - self.v[i, k] - self.v[j, k]
         else:  # t == 4:
-            return self.v[i, j] + self.v[i, k] + self.v[j, k] - 2
+            try:
+                return self.v[i, j] + self.v[i, k] + self.v[j, k] - 2
+            except KeyError:
+                self._get_vals(i, j, k)
+                return self.v[i, j] + self.v[i, k] + self.v[j, k] - 2
+
+    def _get_vals(self, i, j, k):
+        for (a, b) in [(j, k), (i, j), (i, k)]:
+            if (a, b) not in self.v:
+                self.v[a, b] = self.x[a, b].x
 
     def _recalibrate_cut_depths_by_threshold_proportion(self):
         """Find the first <self.cut_size> unsatisfied constraints that are
@@ -422,7 +446,7 @@ class MinBisect:
 
         while True:
             self.d = {}
-            self.v = {(a, b): self.x[a, b].x for (a, b) in self.x}
+            self.v = {}
             if self.threshold_proportion:
                 if self.current_threshold:
                     self._recalibrate_cut_depths_by_threshold_proportion()
@@ -462,58 +486,26 @@ if __name__ == '__main__':
     from profiler import profile
 
     @profile(sort_by='tottime', lines_to_print=10, strip_dirs=True)
-    def profilable_dc():
+    def profilable_random():
         mbs = []
         for i in range(40):
             print(f'test {i + 1}')
             mb = MinBisect(n=20, p=.5, q=.2, number_of_cuts=10)
             mbs.append(mb)
-            mb.solve_iteratively(method='auto')
+            mb.solve_iteratively(method='auto', min_search_proportion=1)
         return mbs
 
     @profile(sort_by='tottime', lines_to_print=10, strip_dirs=True)
-    def profilable_cd(mbs):
-        from min_bisection_cd import MinBisect as MinBisectCD
+    def profilable_once(mbs):
         for i, mb in enumerate(mbs):
             print(f'test {i + 1 + len(mbs)}')
-            mbcd = MinBisectCD(n=20, p=.5, q=.2, number_of_cuts=10)
-            mbcd.a = mb.a
-            mbcd.solve_iteratively(method='auto')
+            mb.solve_once(method='auto')
+            print()
 
-    @profile(sort_by='tottime', lines_to_print=10, strip_dirs=True)
-    def profilable_nf(mbs):
-        from min_bisection_te_nf import MinBisect as MinBisectNF
-        for i, mb in enumerate(mbs):
-            print(f'test {i + 1 + 2*len(mbs)}')
-            mbnf = MinBisectNF(n=20, p=.5, q=.2, number_of_cuts=10)
-            mbnf.a = mb.a
-            mbnf.solve_iteratively(method='auto')
+    mbs = profilable_random()
+    # profilable_once(mbs)
+    print()
 
-
-    @profile(sort_by='tottime', lines_to_print=10, strip_dirs=True)
-    def profilable_f(mbs):
-        from min_bisection_te_f import MinBisect as MinBisectF
-        for i, mb in enumerate(mbs):
-            print(f'test {i + 1 + 3*len(mbs)}')
-            mbf = MinBisectF(n=20, p=.5, q=.2, number_of_cuts=10)
-            mbf.a = mb.a
-            mbf.solve_iteratively(method='auto')
-
-
-    @profile(sort_by='tottime', lines_to_print=10, strip_dirs=True)
-    def profilable_3f(mbs):
-        from min_bisection_te_3f import MinBisect as MinBisect3F
-        for i, mb in enumerate(mbs):
-            print(f'test {i + 1 + 4*len(mbs)}')
-            mb3f = MinBisect3F(n=20, p=.5, q=.2, number_of_cuts=10)
-            mb3f.a = mb.a
-            mb3f.solve_iteratively(method='auto')
-
-    mbs = profilable_dc()
-    profilable_cd(mbs)
-    profilable_nf(mbs)
-    profilable_f(mbs)
-    profilable_3f(mbs)
 
     # print run stats
     # solution_schema.csv.write_directory(mbs[0].data, 'test_results', allow_overwrite=True)
