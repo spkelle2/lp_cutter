@@ -201,6 +201,7 @@ class MinBisect:
             if 10**x >= self.min_search_proportion
         ] + [1]
         self.current_search_proportion = 1
+        self.current_threshold = None
 
         # model
         self.mdl = gu.Model("min bisection")

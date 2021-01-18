@@ -166,7 +166,7 @@ class TestMinBisection(unittest.TestCase):
         self.assertTrue(mb.mdl.params.Method == -1)
         self.assertTrue(mb.mdl.params.LogFile == f'guy_{mb.file_combo}.txt')
 
-    def test_instantiate_model_constraints(self):
+    def test_instantiate_model_cut_size(self):
         mb = MinBisect(8, .5, .1, cut_proportion=.1)
         mb._instantiate_model('iterative')
         self.assertTrue(mb.cut_size == int(.1 * len(mb.c)))
@@ -206,8 +206,11 @@ class TestMinBisection(unittest.TestCase):
         self.assertTrue(mb.warm_start)
         self.assertTrue(mb.method == 'dual')
         self.assertTrue(mb.min_search_proportion == 1)
+        self.assertTrue(mb.threshold_proportion is None)
         self.assertIsInstance(mb.c, set)
         self.assertTrue(mb.sub_solve_id == -1)
+        self.assertTrue(mb.current_search_proportion == 1)
+        self.assertTrue(mb.current_threshold is None)
 
     def test_instantiate_model_passes_asserts(self):
         mb = MinBisect(8, .5, .1, number_of_cuts=100)
