@@ -85,7 +85,7 @@ if __name__ == '__main__':
         'ns': [int(n) for n in sys.argv[2:]],
         'ps': [.5, .8],
         'qs': [.1, .2],
-        'numbers_of_cuts': [1000, 10000, 100000, 1000000],
+        'numbers_of_cuts': [300, 1000, 3000, 10000, 30000],
         'min_search_proportions': [.01, .1],
         'threshold_proportions': [.5, .9],
         'repeats': 5,
