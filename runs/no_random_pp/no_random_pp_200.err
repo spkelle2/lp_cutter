@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "runner.py", line 94, in <module>
+    run_experiments(**kwargs)
+  File "runner.py", line 56, in run_experiments
+    mb.solve_once(method='auto')
+  File "/home/sek519/lp_cutter/min_bisection.py", line 262, in wrapper
+    retval = func(self, *args, **kwargs)
+  File "/home/sek519/lp_cutter/min_bisection.py", line 335, in solve_once
+    self._optimize()
+  File "/home/sek519/lp_cutter/min_bisection.py", line 300, in _optimize
+    self.mdl.optimize()
+  File "src/gurobipy/model.pxi", line 847, in gurobipy.gurobipy.Model.optimize
+gurobipy.gurobipy.GurobiError: Out of memory

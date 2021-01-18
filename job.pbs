@@ -1,9 +1,0 @@
-#PBS -N sean_test
-#PBS -e /home/sek519/lp_cutter/test.err
-#PBS -o /home/sek519/lp_cutter/test.out
-#PBS -l nodes=polyp9:ppn=4,mem=10gb,vmem=15gb
-#PBS -q long
-
-cd /home/sek519/lp_cutter
-source /home/sek519/lp_cutter/env_lpc/bin/activate
-python3 runner.py runs_10 10
