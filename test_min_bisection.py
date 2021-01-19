@@ -83,6 +83,8 @@ class TestMinBisection(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        for item in [_ for _ in os.listdir() if _.endswith('.prof')]:
+            os.remove(item)
         if os.path.exists('guy_iterative_auto_warm.txt'):
             os.remove('guy_iterative_auto_warm.txt')
 

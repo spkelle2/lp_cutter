@@ -322,9 +322,13 @@ class MinBisect:
         }
 
     @_summary_profile
-    def solve_once(self, method='auto', output_file_base=None):
-        """Solves the model with all constraints added at once. For parameter
-        explanation, see MinBisect._instantiate_model
+    def solve_once(self, method='auto', run_time_profile_file=None, memory_profile_file=None):
+        """Solves the model with all constraints added at once.
+         
+         :param run_time_profile_file: name to give runtime profiler output if its activated
+         :param memory_profile_file: name to give memory profiler output if its activated
+         
+        For additional parameter explanation, see MinBisect._instantiate_model
 
         :return:
         """
@@ -429,10 +433,14 @@ class MinBisect:
     @profile_run_time(sort_by='tottime', lines_to_print=20, strip_dirs=True)
     def solve_iteratively(self, warm_start=True, method='dual',
                           min_search_proportion=1, threshold_proportion=None,
-                          output_file_base=None):
+                          run_time_profile_file=None, memory_profile_file=None):
         """Solve the model by feeding in only the top most violated constraints,
-        and repeat until no violated constraints remain. For explanation of the
-        parameters, see MinBisect._instantiate_model
+        and repeat until no violated constraints remain.
+        
+        :param run_time_profile_file: name to give runtime profiler output if its activated
+        :param memory_profile_file: name to give memory profiler output if its activated
+        
+        For explanation of the parameters, see MinBisect._instantiate_model
 
         :return:
         """
@@ -489,22 +497,22 @@ class MinBisect:
 if __name__ == '__main__':
 
     # @profile_run_time(sort_by='tottime', lines_to_print=10, strip_dirs=True)
-    @profile_memory(key_type='lineno', limit=10, unit='KB')
     def profilable_random():
         mbs = []
         for i in range(1):
             print(f'test {i + 1}')
-            mb = MinBisect(n=10, p=.5, q=.2, number_of_cuts=10)
+            mb = MinBisect(n=20, p=.5, q=.2, number_of_cuts=100)
             mbs.append(mb)
             mb.solve_iteratively(method='auto', min_search_proportion=.1,
-                                 output_file_base='profilable_random')
+                                 run_time_profile_file='profilable_random.prof')
+            solution_schema.csv.write_directory(mb.data, 'test_results', allow_overwrite=True)
         return mbs
 
     # @profile_run_time(sort_by='tottime', lines_to_print=10, strip_dirs=True)
     def profilable_once(mbs):
         for i, mb in enumerate(mbs):
             print(f'test {i + 1 + len(mbs)}')
-            mb.solve_once(method='auto', output_file_base='profilable_once')
+            mb.solve_once(method='auto', run_time_profile_file='profilable_once.prof')
             print()
 
     mbs = profilable_random()

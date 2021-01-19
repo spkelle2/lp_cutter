@@ -6,13 +6,14 @@ import os
 import tracemalloc
 
 
-def profile_run_time(output_file_base=None, sort_by='cumulative', lines_to_print=None, strip_dirs=False):
+def profile_run_time(run_time_profile_file=None, sort_by='cumulative',
+                     lines_to_print=None, strip_dirs=False):
     """A time profiler decorator.
     Inspired by and modified the profile decorator of Giampaolo Rodola:
     http://code.activestate.com/recipes/577817-profile-decorator/
     Args:
-        output_file_base: str or None. Default is None
-            Path of the output file without extension. If only name of the file
+        run_time_profile_file: str, pathlike, or None. Default is None.
+            Path of the output file. If only name of the file
             is given, it's saved in the current directory.
             If it's None, the name of the decorated function is used.
         sort_by: str or SortKey enum or tuple/list of str/SortKey enum
@@ -34,8 +35,8 @@ def profile_run_time(output_file_base=None, sort_by='cumulative', lines_to_print
     def inner(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            _output_file = (output_file_base or kwargs.get('output_file_base') or func.__name__) + \
-                           '_run_time.prof'
+            _output_file = run_time_profile_file or kwargs.get('run_time_profile_file') \
+                           or func.__name__ + '.prof'
             pr = cProfile.Profile()
             pr.enable()
             retval = func(*args, **kwargs)
@@ -58,7 +59,17 @@ def profile_run_time(output_file_base=None, sort_by='cumulative', lines_to_print
     return inner
 
 
-def profile_memory(output_file_base=None, key_type='lineno', limit=3, unit='KB'):
+def profile_memory(memory_profile_file=None, key_type='lineno', limit=3, unit='KB'):
+    """decorator that profiles memory usage throughout the decorated function
+
+    :param memory_profile_file: str, pathlike, or None. Default is None.
+    Path of the output file. If only name of the file is given, it's saved in
+    the current directory.
+    :param key_type: what attribute to sort on
+    :param limit: how many lines to show
+    :param unit: what unit to show data usage in. expects KB, MB, GB, or TB
+    :return:
+    """
 
     def inner(func):
 
@@ -68,8 +79,8 @@ def profile_memory(output_file_base=None, key_type='lineno', limit=3, unit='KB')
             assert unit in power_dict, 'please provide appropriate memory unit'
             power = power_dict[unit]
             
-            _output_file = (output_file_base or kwargs.get('output_file_base') or func.__name__) + \
-                           '_memory.prof'
+            _output_file = memory_profile_file or kwargs.get('memory_profile_file') \
+                           or func.__name__ + '.prof'
             tracemalloc.start()
 
             retval = func(*args, **kwargs)
@@ -95,9 +106,9 @@ def profile_memory(output_file_base=None, key_type='lineno', limit=3, unit='KB')
                 other = top_stats[limit:]
                 if other:
                     size = sum(stat.size for stat in other)
-                    f.write(f"{len(other)} other: {'{:.2f}'.format(size / (1024**power))} {unit}")
+                    f.write(f"{len(other)} other: {'{:.2f}'.format(size / (1024**power))} {unit} \n")
                 total = sum(stat.size for stat in top_stats)
-                f.write(f"Total allocated size: {'{:.2f}'.format(total / (1024**power))} {unit}")
+                f.write(f"Total allocated size: {'{:.2f}'.format(total / (1024**power))} {unit} \n")
 
             return retval
 
