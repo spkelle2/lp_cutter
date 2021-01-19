@@ -1,0 +1,28 @@
+         209646 function calls in 0.709 seconds
+
+   Ordered by: internal time
+   List reduced from 53 to 20 due to restriction <20>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+       52    0.212    0.004    0.221    0.004 min_bisection.py:293(_optimize)
+    91243    0.133    0.000    0.215    0.000 min_bisection.py:340(_get_cut_depth)
+      118    0.088    0.001    0.416    0.004 min_bisection.py:404(_recalibrate_cut_depths_by_search_proportion)
+     5734    0.082    0.000    0.082    0.000 min_bisection.py:378(_get_vals)
+      102    0.054    0.001    0.113    0.001 random.py:286(sample)
+    23653    0.035    0.000    0.052    0.000 random.py:224(_randbelow)
+      610    0.029    0.000    0.032    0.000 min_bisection.py:226(_add_triangle_inequality)
+      191    0.017    0.000    0.017    0.000 min_bisection.py:219(<genexpr>)
+    38863    0.013    0.000    0.013    0.000 {method 'getrandbits' of '_random.Random' objects}
+        1    0.007    0.007    0.032    0.032 min_bisection.py:156(_instantiate_model)
+        1    0.005    0.005    0.005    0.005 min_bisection.py:65(<setcomp>)
+        1    0.005    0.005    0.709    0.709 min_bisection.py:428(solve_iteratively)
+    15982    0.004    0.000    0.004    0.000 {method 'add' of 'set' objects}
+    23653    0.004    0.000    0.004    0.000 {method 'bit_length' of 'int' objects}
+       52    0.002    0.000    0.005    0.000 utils.py:855(__init__)
+     1427    0.002    0.000    0.003    0.000 {built-in method _abc._abc_instancecheck}
+        1    0.002    0.002    0.002    0.002 min_bisection.py:215(<dictcomp>)
+      118    0.002    0.000    0.002    0.000 {built-in method builtins.sorted}
+      624    0.001    0.000    0.002    0.000 utils.py:880(__setitem__)
+      118    0.001    0.000    0.003    0.000 min_bisection.py:417(_find_most_violated_constraints)
+
+

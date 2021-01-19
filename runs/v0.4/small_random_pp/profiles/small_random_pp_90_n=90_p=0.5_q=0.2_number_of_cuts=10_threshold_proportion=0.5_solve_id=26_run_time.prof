@@ -1,0 +1,28 @@
+         31044029 function calls in 1500.094 seconds
+
+   Ordered by: internal time
+   List reduced from 55 to 20 due to restriction <20>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      876 1388.121    1.585 1388.271    1.585 min_bisection.py:293(_optimize)
+ 28880677   49.757    0.000   80.244    0.000 min_bisection.py:340(_get_cut_depth)
+  2023029   30.487    0.000   30.487    0.000 min_bisection.py:378(_get_vals)
+      873   26.732    0.031  104.622    0.120 min_bisection.py:383(_recalibrate_cut_depths_by_threshold_proportion)
+        3    1.415    0.472    3.769    1.256 min_bisection.py:404(_recalibrate_cut_depths_by_search_proportion)
+        1    1.054    1.054    1.054    1.054 min_bisection.py:65(<setcomp>)
+        1    1.017    1.017 1500.094 1500.094 min_bisection.py:428(solve_iteratively)
+     8836    0.467    0.000    0.504    0.000 min_bisection.py:226(_add_triangle_inequality)
+     4006    0.341    0.000    0.341    0.000 min_bisection.py:219(<genexpr>)
+        1    0.223    0.223    1.665    1.665 min_bisection.py:156(_instantiate_model)
+      878    0.167    0.000    0.167    0.000 {built-in method builtins.sorted}
+        1    0.055    0.055    0.056    0.056 random.py:286(sample)
+      876    0.033    0.000    0.084    0.000 utils.py:855(__init__)
+        1    0.033    0.033    0.033    0.033 min_bisection.py:215(<dictcomp>)
+    10512    0.023    0.000    0.029    0.000 utils.py:880(__setitem__)
+      876    0.022    0.000    0.114    0.000 min_bisection.py:417(_find_most_violated_constraints)
+    17678    0.018    0.000    0.018    0.000 {built-in method _abc._abc_instancecheck}
+      876    0.017    0.000    0.132    0.000 ticdatfactory.py:635(__setitem__)
+     1752    0.015    0.000    0.015    0.000 {built-in method time.process_time}
+        2    0.011    0.006    0.354    0.177 {gurobipy.gurobipy.quicksum}
+
+

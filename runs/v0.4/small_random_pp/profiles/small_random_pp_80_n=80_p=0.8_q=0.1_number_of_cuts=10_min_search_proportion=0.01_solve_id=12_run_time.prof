@@ -1,0 +1,28 @@
+         2907640 function calls in 17.807 seconds
+
+   Ordered by: internal time
+   List reduced from 53 to 20 due to restriction <20>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      119    7.246    0.061    8.268    0.069 random.py:286(sample)
+   209710    3.345    0.000    3.345    0.000 min_bisection.py:378(_get_vals)
+      119    2.839    0.024   15.948    0.134 min_bisection.py:404(_recalibrate_cut_depths_by_search_proportion)
+   743779    1.550    0.000    4.895    0.000 min_bisection.py:340(_get_cut_depth)
+   420258    0.627    0.000    0.915    0.000 random.py:224(_randbelow)
+      117    0.543    0.005    0.566    0.005 min_bisection.py:293(_optimize)
+        1    0.435    0.435    1.051    1.051 min_bisection.py:156(_instantiate_model)
+        1    0.315    0.315    0.315    0.315 min_bisection.py:65(<setcomp>)
+     3161    0.264    0.000    0.264    0.000 min_bisection.py:219(<genexpr>)
+   671140    0.224    0.000    0.224    0.000 {method 'getrandbits' of '_random.Random' objects}
+   416499    0.098    0.000    0.098    0.000 {method 'add' of 'set' objects}
+        1    0.094    0.094   17.807   17.807 min_bisection.py:428(solve_iteratively)
+     1260    0.074    0.000    0.080    0.000 min_bisection.py:226(_add_triangle_inequality)
+   420258    0.064    0.000    0.064    0.000 {method 'bit_length' of 'int' objects}
+        1    0.026    0.026    0.026    0.026 min_bisection.py:215(<dictcomp>)
+      119    0.012    0.000    0.012    0.000 {built-in method builtins.sorted}
+        2    0.009    0.004    0.275    0.137 {gurobipy.gurobipy.quicksum}
+      117    0.005    0.000    0.012    0.000 utils.py:855(__init__)
+     2762    0.005    0.000    0.007    0.000 {built-in method _abc._abc_instancecheck}
+     1404    0.003    0.000    0.004    0.000 utils.py:880(__setitem__)
+
+
