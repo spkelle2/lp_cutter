@@ -88,11 +88,11 @@ if __name__ == '__main__':
         'ns': [int(n) for n in sys.argv[2:]],
         'ps': [.5, .8],
         'qs': [.1, .2],
-        'numbers_of_cuts': [1000, 10000],
+        'numbers_of_cuts': [10, 100],
         'min_search_proportions': [.01, .1],
         'threshold_proportions': [.5, .9],
         'repeats': 5,
         'fldr': sys.argv[1],
-        'solve_once': False
+        'solve_once': True
     }
     run_experiments(**kwargs)
