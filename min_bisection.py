@@ -489,13 +489,14 @@ class MinBisect:
 if __name__ == '__main__':
 
     # @profile_run_time(sort_by='tottime', lines_to_print=10, strip_dirs=True)
+    @profile_memory(key_type='lineno', limit=10, unit='KB')
     def profilable_random():
         mbs = []
-        for i in range(5):
+        for i in range(1):
             print(f'test {i + 1}')
-            mb = MinBisect(n=40, p=.5, q=.2, number_of_cuts=1000)
+            mb = MinBisect(n=10, p=.5, q=.2, number_of_cuts=10)
             mbs.append(mb)
-            mb.solve_iteratively(method='auto', min_search_proportion=1,
+            mb.solve_iteratively(method='auto', min_search_proportion=.1,
                                  output_file_base='profilable_random')
         return mbs
 
