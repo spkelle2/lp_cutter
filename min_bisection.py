@@ -351,8 +351,6 @@ class MinBisect:
         :param t: what type of constraint is this
         :return: depth of the cut
         """
-        # try filtering first and also try/except
-        # try functions in different places
 
         if t == 1:
             try:
@@ -494,28 +492,29 @@ class MinBisect:
             assert self.mdl.status == gu.GRB.OPTIMAL, f"model ended up as: {self.mdl.status}"
 
 
+# @profile_run_time(sort_by='tottime', lines_to_print=10, strip_dirs=True)
+def profilable_random(x):
+    mbs = []
+    for i in range(x):
+        print(f'test {i + 1}')
+        mb = MinBisect(n=60, p=.5, q=.2, number_of_cuts=1000)
+        mbs.append(mb)
+        mb.solve_iteratively(method='auto', threshold_proportion=.9)
+        solution_schema.csv.write_directory(mb.data, 'test_results', allow_overwrite=True)
+    return mbs
+
+
+# @profile_run_time(sort_by='tottime', lines_to_print=10, strip_dirs=True)
+def profilable_once(mbs):
+    for i, mb in enumerate(mbs):
+        print(f'test {i + 1 + len(mbs)}')
+        mb.solve_once(method='auto')
+        print()
+
+
 if __name__ == '__main__':
 
-    # @profile_run_time(sort_by='tottime', lines_to_print=10, strip_dirs=True)
-    def profilable_random():
-        mbs = []
-        for i in range(1):
-            print(f'test {i + 1}')
-            mb = MinBisect(n=20, p=.5, q=.2, number_of_cuts=100)
-            mbs.append(mb)
-            mb.solve_iteratively(method='auto', min_search_proportion=.1,
-                                 run_time_profile_file='profilable_random.prof')
-            solution_schema.csv.write_directory(mb.data, 'test_results', allow_overwrite=True)
-        return mbs
-
-    # @profile_run_time(sort_by='tottime', lines_to_print=10, strip_dirs=True)
-    def profilable_once(mbs):
-        for i, mb in enumerate(mbs):
-            print(f'test {i + 1 + len(mbs)}')
-            mb.solve_once(method='auto', run_time_profile_file='profilable_once.prof')
-            print()
-
-    mbs = profilable_random()
+    mbs = profilable_random(1)
     # profilable_once(mbs)
     print()
 
