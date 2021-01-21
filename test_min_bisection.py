@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from min_bisection import create_constraint_indices, create_adjacency_matrix, \
     MinBisect, solution_schema
+from slim_min_bisection import solve_iterative_min_bisect
 
 
 class TestCreateAdjacencyMatrix(unittest.TestCase):
@@ -83,6 +84,8 @@ class TestMinBisection(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        for item in [_ for _ in os.listdir() if _.endswith('.prof')]:
+            os.remove(item)
         if os.path.exists('guy_iterative_auto_warm.txt'):
             os.remove('guy_iterative_auto_warm.txt')
 
@@ -324,7 +327,7 @@ class TestMinBisection(unittest.TestCase):
         self.assertTrue(data['gurobi_cpu_time'] == gurobi_cpu_time)
         self.assertTrue(data['total_cpu_time'] == data['gurobi_cpu_time'] + data['non_gurobi_cpu_time'])
         # compares different runs but they should all be same anyways
-        self.assertTrue(isclose(data['objective_value'], mb.mdl.ObjVal, rel_tol=1e-3))
+        self.assertTrue(isclose(data['objective_value'], mb.mdl.ObjVal, abs_tol=.0001))
 
         # make sure all time values > 0
         for f in mb.data.summary_stats.values():
@@ -333,7 +336,7 @@ class TestMinBisection(unittest.TestCase):
 
         # make sure all objective values are the same for each run
         objs = [f['objective_value'] for f in mb.data.summary_stats.values()]
-        self.assertTrue(all(isclose(obj, objs[0], rel_tol=1e-3) for obj in objs))
+        self.assertTrue(all(isclose(obj, objs[0], abs_tol=.0001) for obj in objs))
 
     def test_optimize(self):
         mb = MinBisect(8, .5, .1, .1, write_mps=True)
@@ -435,23 +438,23 @@ class TestMinBisection(unittest.TestCase):
         mb.solve_once()
         once_obj = mb.mdl.ObjVal
         mb.solve_iteratively()
-        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
         mb.solve_iteratively(min_search_proportion=.001)
-        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
         mb.solve_iteratively(threshold_proportion=.5)
-        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
         mb.solve_iteratively(threshold_proportion=.1)
-        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
         mb.solve_iteratively(threshold_proportion=.9)
-        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
     def test_solve_iteratively_matches_solve_once_big(self):
@@ -459,24 +462,51 @@ class TestMinBisection(unittest.TestCase):
         mb.solve_once()
         once_obj = mb.mdl.ObjVal
         mb.solve_iteratively()
-        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
         mb.solve_iteratively(min_search_proportion=.001)
-        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
         mb.solve_iteratively(threshold_proportion=.5)
-        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
         mb.solve_iteratively(threshold_proportion=.1)
-        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
         mb.solve_iteratively(threshold_proportion=.9)
-        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, rel_tol=1e-3),
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
+
+    def test_solve_iteratively_matches_slim_min_bisection(self):
+
+        # test normal
+        x, obj_val, a = solve_iterative_min_bisect(n=40, p=.5, q=.1, cut_size=100)
+        mb = MinBisect(n=40, p=.5, q=.1, number_of_cuts=100)
+        mb.a = a
+        mb.solve_iteratively(method='auto')
+        self.assertTrue(isclose(obj_val, mb.mdl.ObjVal, abs_tol=.0001),
+                        f'slim obj {obj_val} but iterative obj {mb.mdl.ObjVal}')
+        for (i, j) in x:
+            self.assertTrue(isclose(x[i, j], mb.x[i, j].x, abs_tol=.0001),
+                            f'slim x[{i, j}] {x[i, j]} but iterative x[{i, j}]'
+                            f'{mb.x[i, j].x}')
+
+        # test threshold proportion
+        x, obj_val, a = solve_iterative_min_bisect(n=40, p=.5, q=.1, cut_size=100,
+                                                   threshold_proportion=.9)
+        mb = MinBisect(n=40, p=.5, q=.1, number_of_cuts=100)
+        mb.a = a
+        mb.solve_iteratively(method='auto', threshold_proportion=.9)
+        self.assertTrue(isclose(obj_val, mb.mdl.ObjVal, abs_tol=.0001),
+                        f'slim obj {obj_val} but iterative obj {mb.mdl.ObjVal}')
+        for (i, j) in x:
+            self.assertTrue(isclose(x[i, j], mb.x[i, j].x, abs_tol=.0001),
+                            f'slim x[{i, j}] {x[i, j]} but iterative x[{i, j}]'
+                            f'{mb.x[i, j].x}')
 
     def test_get_cut_depth(self):
         a = np.array([[0, 1, 0, 1],
