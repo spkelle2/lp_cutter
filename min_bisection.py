@@ -146,8 +146,9 @@ class MinBisect:
 
     @property
     def file_combo(self):
+        string = f'_{self.warm_str}_{self.min_search_proportion}_{self.threshold_proportion}'
         return f'{self.solve_type}_{self.method}' \
-               f'{"" if self.solve_type != "iterative" else f"_{self.warm_str}"}'
+               f'{"" if self.solve_type != "iterative" else string}'
 
     @property
     def warm_str(self):
@@ -297,7 +298,10 @@ class MinBisect:
         """
         self.sub_solve_id += 1
         if self.write_mps:
-            self.mdl.write(f'model_{self.file_combo}_{self.sub_solve_id}.mps')
+            name = f'model_{self.file_combo}_{self.sub_solve_id}'
+            self.mdl.write(f'{name}.mps')
+            if self.sub_solve_id > 0:
+                self.mdl.write(f'{name}.bas')
         sub_solve_start = time.process_time()
         self.mdl.optimize()
         sub_solve_cpu_time = time.process_time() - sub_solve_start
@@ -514,10 +518,8 @@ def profilable_once(mbs):
 
 if __name__ == '__main__':
 
-    mbs = profilable_random(1)
-    # profilable_once(mbs)
-    print()
-
+    mb = MinBisect(n=60, p=.5, q=.2, number_of_cuts=10, write_mps=True)
+    mb.solve_iteratively(method='auto')
 
     # print run stats
-    solution_schema.csv.write_directory(mbs[0].data, 'test_results', allow_overwrite=True)
+    solution_schema.csv.write_directory(mb.data, 'test_results', allow_overwrite=True)

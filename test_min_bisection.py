@@ -86,8 +86,8 @@ class TestMinBisection(unittest.TestCase):
     def tearDownClass(cls):
         for item in [_ for _ in os.listdir() if _.endswith('.prof')]:
             os.remove(item)
-        if os.path.exists('guy_iterative_auto_warm.txt'):
-            os.remove('guy_iterative_auto_warm.txt')
+        if os.path.exists('guy_iterative_auto_warm_1_None.txt'):
+            os.remove('guy_iterative_auto_warm_1_None.txt')
 
     def test_init(self):
         # proportion
@@ -125,7 +125,9 @@ class TestMinBisection(unittest.TestCase):
         mb.solve_type = 'iterative'
         mb.method = 'dual'
         mb.warm_start = True
-        self.assertTrue(mb.file_combo == 'iterative_dual_warm')
+        mb.min_search_proportion = 1
+        mb.threshold_proportion = None
+        self.assertTrue(mb.file_combo == 'iterative_dual_warm_1_None')
 
         mb.solve_type = 'once'
         mb.method = 'auto'
@@ -137,7 +139,7 @@ class TestMinBisection(unittest.TestCase):
         mb.solve_type = 'iterative'
         mb.method = 'auto'
         mb.warm_start = False
-        self.assertTrue(mb.file_combo == 'iterative_auto_cold')
+        self.assertTrue(mb.file_combo == 'iterative_auto_cold_1_None')
 
     def test_instantiate_model(self):
         indices = range(8)
@@ -378,8 +380,10 @@ class TestMinBisection(unittest.TestCase):
         self.assertTrue(data['current_threshold'] is None)
 
         # check mps files created
-        for pth in ['model_iterative_dual_warm_0.mps',
-                    'model_iterative_dual_warm_1.mps', 'model_once_dual_0.mps']:
+        for pth in ['model_iterative_dual_warm_1_None_0.mps',
+                    'model_iterative_dual_warm_1_None_1.mps',
+                    'model_once_dual_0.mps',
+                    'model_iterative_dual_warm_1_None_1.bas']:
             self.assertTrue(os.path.exists(pth))
             os.remove(pth)
 
