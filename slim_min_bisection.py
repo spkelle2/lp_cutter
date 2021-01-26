@@ -2,8 +2,7 @@ import gurobipy as gu
 from math import floor
 import random
 
-from min_bisection import create_constraint_indices, create_adjacency_matrix, \
-    MinBisect, profilable_random
+from min_bisection import create_constraint_indices, create_adjacency_matrix
 from profiler import profile_run_time
 
 
@@ -155,6 +154,7 @@ def profilable_slim(mbs):
 
 
 if __name__ == '__main__':
+    from min_bisection import profilable_random
     mbs = profilable_random(5)
     profilable_slim(mbs)
 
