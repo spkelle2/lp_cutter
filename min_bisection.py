@@ -13,8 +13,8 @@ solution_schema = TicDatFactory(
                 'min_search_proportion', 'threshold_proportion', 'act_tol',
                 'sub_solve_id'],
                ['n', 'p', 'q', 'cut_type', 'cut_value', 'cuts_sought',
-                'cuts_added', 'search_proportion_used', 'current_threshold',
-                'variables', 'constraints', 'cpu_time']],
+                'cuts_added', 'cuts_removed', 'search_proportion_used',
+                'current_threshold', 'variables', 'constraints', 'cpu_time']],
     summary_stats=[['solve_id', 'solve_type', 'method', 'warm_start',
                     'min_search_proportion', 'threshold_proportion', 'act_tol'],
                    ['n', 'p', 'q', 'cut_type', 'cut_value', 'max_variables',
@@ -328,6 +328,7 @@ class MinBisect:
             'cuts_sought': len(self.inf) if self.solve_type == 'iterative' and
                 self.sub_solve_id == 0 else self.cut_size,
             'cuts_added': len(self.inf) if self.solve_type == 'iterative' else self.cut_size,
+            'cuts_removed': len(self.removed),
             'search_proportion_used': self.current_search_proportion,
             'current_threshold': self.current_threshold,
             'constraints': self.mdl.NumConstrs,
@@ -487,15 +488,15 @@ class MinBisect:
         self._find_most_violated_constraints()
         if not self.keep_iterating:
             return
-        self.c.update(self.removed)  # add removed constraints back to potential cuts
+        if self.act_tol:
+            self._remove_inactive_constraints()
+            self.c.update(self.removed)  # add removed constraints back to potential cuts
         for ((i, j, k), t) in self.inf:
             self._add_triangle_inequality(i, j, k, t)
         if not self.warm_start:
             self.mdl.reset()
         self._optimize()
         assert self.mdl.status == gu.GRB.OPTIMAL, f"model ended up as: {self.mdl.status}"
-        if self.act_tol:
-            self._remove_inactive_constraints()
 
     @_summary_profile
     @profile_run_time(sort_by='tottime', lines_to_print=20, strip_dirs=True)

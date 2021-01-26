@@ -385,6 +385,7 @@ class TestMinBisection(unittest.TestCase):
         self.assertTrue(data['cut_value'] == .1)
         self.assertTrue(data['cuts_sought'] == int(.1*224))  # 224 cuts for problem size
         self.assertTrue(data['cuts_added'] == 1)  # only added one manually
+        self.assertTrue(data['cuts_removed'] == 0)  # never called remove constraints
         self.assertTrue(data['constraints'] == 2)  # because equal partition and 1 cut
         self.assertTrue(data['variables'] == mb.mdl.NumVars)
         self.assertTrue(data['cpu_time'] >= 0)
@@ -400,18 +401,26 @@ class TestMinBisection(unittest.TestCase):
             os.remove(pth)
 
     def test_optimize_captures_correct_cuts(self):
-        mb = MinBisect(20, .5, .1, number_of_cuts=10)
-        mb.solve_iteratively()
+        mb = MinBisect(20, .5, .1, number_of_cuts=10, first_iteration_cuts=500)
+        mb.solve_iteratively(act_tol=.1)
 
         # first iteration should match the fixed number provided
-        data = mb.data.run_stats[0, 'iterative', 'dual', 'warm', 1, None, None, 0]
-        self.assertTrue(data['cuts_added'] == 100)
-        self.assertTrue(data['cuts_sought'] == 100)
+        data = mb.data.run_stats[0, 'iterative', 'dual', 'warm', 1, None, .1, 0]
+        self.assertTrue(data['cuts_added'] == 500)
+        self.assertTrue(data['cuts_sought'] == 500)
+        self.assertTrue(data['constraints'] == 501)
+        # and have no cuts removed
+        self.assertTrue(data['cuts_removed'] == 0)
+        pc = data['constraints']
 
-        # second iteration should match number of cuts
-        data = mb.data.run_stats[0, 'iterative', 'dual', 'warm', 1, None, None, 1]
+        # (second and) third iteration should match number of cuts
+        data = mb.data.run_stats[0, 'iterative', 'dual', 'warm', 1, None, .1, 1]
         self.assertTrue(data['cuts_added'] == 10)
         self.assertTrue(data['cuts_sought'] == 10)
+        self.assertTrue(data['cuts_removed'] > 0)
+        # and total cuts should equal last total + added - removed
+        self.assertTrue(data['constraints'] ==
+                        pc + data['cuts_added'] - data['cuts_removed'])
 
     def test_optimize_cut_math_right(self):
         mb = MinBisect(8, .5, .1, number_of_cuts=10)
