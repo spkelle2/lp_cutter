@@ -104,7 +104,7 @@ if __name__ == '__main__':
         'solve_once': False,
         'act_tols': [None, .125, .1, .075, .05, .01, .001, .0001, .00001],
         'min_search_proportions': [1],
-        'repeats': 1,
+        'repeats': 5,
         'fldr': sys.argv[1],
     }
     run_experiments(**kwargs)
