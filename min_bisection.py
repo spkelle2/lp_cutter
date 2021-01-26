@@ -3,6 +3,7 @@ from math import ceil, floor
 import numpy as np
 from profiler import profile_run_time, profile_memory
 import random
+import re
 from ticdat import TicDatFactory
 import time
 
@@ -134,6 +135,9 @@ class MinBisect:
         self.solve_type = None
         self.inf = []
         self.method = None
+        self.removed = []
+        self.act_tol = .000001
+        self.pattern = re.compile(r'^(\d+)_(\d+)_(\d+)_tri(\d)$')
 
         # to be assigned at _instantiate_model
         self.warm_start = None
@@ -142,6 +146,7 @@ class MinBisect:
         self.min_search_proportion = None
         self.threshold_proportion = None
         self.current_threshold = None
+        self.keep_iterating = None
 
 
     @property
@@ -203,6 +208,7 @@ class MinBisect:
         ] + [1]
         self.current_search_proportion = 1
         self.current_threshold = None
+        self.keep_iterating = True
 
         # model
         self.mdl = gu.Model("min bisection")
@@ -420,16 +426,71 @@ class MinBisect:
             if cut_depth > self.tolerance:
                 self.d[(i, j, k), t] = cut_depth
 
-    def _find_most_violated_constraints(self):
-        """Find all constraint indices that represent infeasible constraints (i.e.
-        have values greater than the tolerance) then take the <self.cut_size>
-        most violated
+    def _find_new_threshold(self):
+        """ Find which unadded constraint has a depth of violation that drops it
+        in the 100*<self.threshold_proportion>th percentile of violation depths
+        of all constraints
 
         :return:
         """
-        if len(self.d) <= self.cut_size:
+        key = sorted(self.d, key=self.d.get)[floor(len(self.d) * self.threshold_proportion)]
+        self.current_threshold = self.d[key]
+
+    def _find_most_violated_constraints(self):
+        """Find all constraint indices that represent infeasible constraints (i.e.
+        have values greater than the tolerance) then take the <self.cut_size>
+        most violated. Optionally, use a heuristic to identify these most violated
+        from only a subset of all unadded constraints
+
+        :return:
+        """
+        self.d = {}
+        self.v = {}
+        if self.current_threshold:
+            self._recalibrate_cut_depths_by_threshold_proportion()
             self.inf = list(self.d.keys())
-        self.inf = sorted(self.d, key=self.d.get, reverse=True)[:self.cut_size]
+            if len(self.inf) < self.cut_size:
+                self.current_threshold = None
+        else:
+            for search_proportion in self.search_proportions:
+                self.current_search_proportion = search_proportion
+                self._recalibrate_cut_depths_by_search_proportion()
+                self.inf = sorted(self.d, key=self.d.get, reverse=True)[:self.cut_size]
+                # only find new threshold if there are at least <cut_size>
+                # constraints with that depth or more
+                if self.threshold_proportion and \
+                        self.cut_size < len(self.d) * (1 - self.threshold_proportion):
+                    self._find_new_threshold()
+                if len(self.inf) == self.cut_size:
+                    break
+            if not self.inf:
+                self.keep_iterating = False
+
+    def _remove_inactive_constraints(self):
+        """Removes all constraints from the model which are currently inactive
+
+        :return:
+        """
+        self.removed = []
+        for c in self.mdl.getConstrs():
+            if c.slack > self.act_tol and c.ConstrName != 'equal_partitions':
+                i, j, k, t = [int(idx) for idx in
+                              self.pattern.match(c.ConstrName).groups()]
+                self.removed.append(((i, j, k), t))
+                self.mdl.remove(c)
+
+    def _iterate(self):
+        self._find_most_violated_constraints()
+        if not self.keep_iterating:
+            return
+        self.c.update(self.removed)  # add removed constraints back to potential cuts
+        for ((i, j, k), t) in self.inf:
+            self._add_triangle_inequality(i, j, k, t)
+        if not self.warm_start:
+            self.mdl.reset()
+        self._optimize()
+        assert self.mdl.status == gu.GRB.OPTIMAL, f"model ended up as: {self.mdl.status}"
+        self._remove_inactive_constraints()
 
     @_summary_profile
     @profile_run_time(sort_by='tottime', lines_to_print=20, strip_dirs=True)
@@ -458,42 +519,8 @@ class MinBisect:
         self._optimize()
         assert self.mdl.status == gu.GRB.OPTIMAL, 'small initial solve should make solution'
 
-        while True:
-            self.d = {}
-            self.v = {}
-            if self.threshold_proportion:
-                if self.current_threshold:
-                    self._recalibrate_cut_depths_by_threshold_proportion()
-                    self._find_most_violated_constraints()
-                    if len(self.inf) < self.cut_size:
-                        self.current_threshold = None
-                else:
-                    self._recalibrate_cut_depths_by_search_proportion()
-                    self._find_most_violated_constraints()
-                    # only find new threshold if there are at least <cut_size>
-                    # constraints with that depth or more
-                    if self.cut_size < len(self.d)*(1 - self.threshold_proportion):
-                        key = sorted(self.d, key=self.d.get)[
-                            floor(len(self.d) * self.threshold_proportion)]
-                        self.current_threshold = self.d[key]
-                    if not self.inf:
-                        break
-            else:
-                for search_proportion in self.search_proportions:
-                    self.current_search_proportion = search_proportion
-                    self._recalibrate_cut_depths_by_search_proportion()
-                    self._find_most_violated_constraints()
-                    if len(self.inf) == self.cut_size:
-                        break
-                if not self.inf:
-                    break
-
-            for ((i, j, k), t) in self.inf:
-                self._add_triangle_inequality(i, j, k, t)
-            if not warm_start:
-                self.mdl.reset()
-            self._optimize()
-            assert self.mdl.status == gu.GRB.OPTIMAL, f"model ended up as: {self.mdl.status}"
+        while self.keep_iterating:
+            self._iterate()
 
 
 # @profile_run_time(sort_by='tottime', lines_to_print=10, strip_dirs=True)
@@ -518,8 +545,8 @@ def profilable_once(mbs):
 
 if __name__ == '__main__':
 
-    mb = MinBisect(n=60, p=.5, q=.2, number_of_cuts=10, write_mps=True)
+    mb = MinBisect(n=60, p=.5, q=.2, number_of_cuts=1000)
     mb.solve_iteratively(method='auto')
 
     # print run stats
-    solution_schema.csv.write_directory(mb.data, 'test_results', allow_overwrite=True)
+    # solution_schema.csv.write_directory(mb.data, 'test_results', allow_overwrite=True)
