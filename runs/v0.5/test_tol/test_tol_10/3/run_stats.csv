@@ -1,0 +1,1 @@
+solve_id,solve_type,method,warm_start,min_search_proportion,threshold_proportion,act_tol,sub_solve_id,n,p,q,cut_type,cut_value,cuts_sought,cuts_added,search_proportion_used,current_threshold,variables,constraints,cpu_time
