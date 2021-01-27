@@ -13,6 +13,7 @@ class TestRunExperiments(unittest.TestCase):
     qs = [.1]
     cut_proportions = [.1]
     numbers_of_cuts = [10]
+    act_tols = [.1]
     repeats = 1
     min_search_proportions = [.1, 1]
     threshold_proportions = [.9]
@@ -31,9 +32,12 @@ class TestRunExperiments(unittest.TestCase):
         return data
 
     def test_saves_exactly_all_run_data(self):
-        run_experiments(self.ns, self.ps, self.qs, self.cut_proportions,
-                        self.numbers_of_cuts, self.min_search_proportions,
-                        self.threshold_proportions, self.repeats, self.fldr)
+        run_experiments(ns=self.ns, ps=self.ps, qs=self.qs,
+                        cut_proportions=self.cut_proportions,
+                        numbers_of_cuts=self.numbers_of_cuts, act_tols=self.act_tols,
+                        min_search_proportions=self.min_search_proportions,
+                        threshold_proportions=self.threshold_proportions,
+                        repeats=self.repeats, fldr=self.fldr)
         data = self.read_data()
 
         # 8 possible combos here 2 * (1 + 2 + 1)
@@ -52,10 +56,13 @@ class TestRunExperiments(unittest.TestCase):
                              if x.endswith('_run_time.prof')]) == 4)
 
     def test_turns_off_single_solve(self):
-        run_experiments(self.ns, self.ps, self.qs, self.cut_proportions,
-                        self.numbers_of_cuts, self.min_search_proportions,
-                        self.threshold_proportions, self.repeats, self.fldr,
-                        False)
+        run_experiments(ns=self.ns, ps=self.ps, qs=self.qs,
+                        cut_proportions=self.cut_proportions,
+                        numbers_of_cuts=self.numbers_of_cuts, solve_once=False,
+                        act_tols=self.act_tols,
+                        min_search_proportions=self.min_search_proportions,
+                        threshold_proportions=self.threshold_proportions,
+                        repeats=self.repeats, fldr=self.fldr)
         data = self.read_data()
 
         # 8 possible combos here 2 * (1 + 2 + 1)

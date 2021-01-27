@@ -1,14 +1,15 @@
 import gurobipy as gu
 from math import floor
 import random
+import re
 
-from min_bisection import create_constraint_indices, create_adjacency_matrix, \
-    MinBisect, profilable_random
+from min_bisection import create_constraint_indices, create_adjacency_matrix
 from profiler import profile_run_time
 
 
 # @profile_run_time(sort_by='tottime', lines_to_print=20, strip_dirs=True)
-def solve_iterative_min_bisect(n, p, q, cut_size, threshold_proportion=None, a=None):
+def solve_iterative_min_bisect(n, p, q, cut_size, threshold_proportion=None,
+                               a=None, act_tol=None):
     """for a given n, p, q, cut_size, and optional threshold_proportion, run an
     iterative solve. Optionally accepts the adjacency matrix used in another run
     for comparison. If given a threshold_proportion, will only search through
@@ -85,6 +86,7 @@ def solve_iterative_min_bisect(n, p, q, cut_size, threshold_proportion=None, a=N
     a = a if a is not None else create_adjacency_matrix(n, p, q)
     c = create_constraint_indices(indices)
     current_threshold = None
+    pattern = re.compile(r'^(\d+)_(\d+)_(\d+)_tri(\d)$')
         
     # model
     mdl = gu.Model("min bisection")
@@ -141,6 +143,14 @@ def solve_iterative_min_bisect(n, p, q, cut_size, threshold_proportion=None, a=N
                 x = {(i, j): v.x for (i, j), v in x.items()}
                 return x, mdl.ObjVal, a
 
+        if act_tol:
+            for constr in mdl.getConstrs():
+                if constr.slack > act_tol and constr.ConstrName != 'equal_partitions':
+                    i, j, k, t = [int(idx) for idx in
+                                  pattern.match(constr.ConstrName).groups()]
+                    c.add(((i, j, k), t))
+                    mdl.remove(constr)
+
         for ((i, j, k), t) in inf:
             _add_triangle_inequality(i, j, k, t)
         mdl.optimize()
@@ -150,11 +160,12 @@ def solve_iterative_min_bisect(n, p, q, cut_size, threshold_proportion=None, a=N
 def profilable_slim(mbs):
     for i, mb in enumerate(mbs):
         print(f'test {i + 1 + len(mbs)}')
-        solve_iterative_min_bisect(n=60, p=.5, q=.2, cut_size=1000, a=mb.a,
-                                   threshold_proportion=.9)
+        solve_iterative_min_bisect(n=mb.n, p=mb.p, q=mb.q, cut_size=mb.cut_size,
+                                   a=mb.a, act_tol=mb.act_tol)
 
 
 if __name__ == '__main__':
-    mbs = profilable_random(5)
+    from min_bisection import removed_075
+    mbs = removed_075(1)
     profilable_slim(mbs)
 
