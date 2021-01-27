@@ -499,12 +499,13 @@ class TestMinBisection(unittest.TestCase):
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
     def test_solve_iteratively_matches_slim_min_bisection(self):
+        # baseline
+        mb = MinBisect(n=40, p=.5, q=.1, number_of_cuts=100)
+        mb.solve_iteratively(method='auto')
 
         # test normal
-        x, obj_val, a = solve_iterative_min_bisect(n=40, p=.5, q=.1, cut_size=100)
-        mb = MinBisect(n=40, p=.5, q=.1, number_of_cuts=100)
-        mb.a = a
-        mb.solve_iteratively(method='auto')
+        x, obj_val, a = solve_iterative_min_bisect(n=40, p=.5, q=.1, cut_size=100,
+                                                   a=mb.a)
         self.assertTrue(isclose(obj_val, mb.mdl.ObjVal, abs_tol=.0001),
                         f'slim obj {obj_val} but iterative obj {mb.mdl.ObjVal}')
         for (i, j) in x:
@@ -514,10 +515,19 @@ class TestMinBisection(unittest.TestCase):
 
         # test threshold proportion
         x, obj_val, a = solve_iterative_min_bisect(n=40, p=.5, q=.1, cut_size=100,
-                                                   threshold_proportion=.9)
-        mb = MinBisect(n=40, p=.5, q=.1, number_of_cuts=100)
-        mb.a = a
+                                                   a=mb.a, threshold_proportion=.9)
         mb.solve_iteratively(method='auto', threshold_proportion=.9)
+        self.assertTrue(isclose(obj_val, mb.mdl.ObjVal, abs_tol=.0001),
+                        f'slim obj {obj_val} but iterative obj {mb.mdl.ObjVal}')
+        for (i, j) in x:
+            self.assertTrue(isclose(x[i, j], mb.x[i, j].x, abs_tol=.0001),
+                            f'slim x[{i, j}] {x[i, j]} but iterative x[{i, j}]'
+                            f'{mb.x[i, j].x}')
+
+        # test active constraint tolerance
+        x, obj_val, a = solve_iterative_min_bisect(n=40, p=.5, q=.1, cut_size=100,
+                                                   a=mb.a, act_tol=.1)
+        mb.solve_iteratively(method='auto', act_tol=.1)
         self.assertTrue(isclose(obj_val, mb.mdl.ObjVal, abs_tol=.0001),
                         f'slim obj {obj_val} but iterative obj {mb.mdl.ObjVal}')
         for (i, j) in x:

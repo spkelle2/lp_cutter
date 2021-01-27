@@ -477,12 +477,12 @@ class MinBisect:
         :return:
         """
         self.removed = []
-        for c in self.mdl.getConstrs():
-            if c.slack > self.act_tol and c.ConstrName != 'equal_partitions':
+        for constr in self.mdl.getConstrs():
+            if constr.slack > self.act_tol and constr.ConstrName != 'equal_partitions':
                 i, j, k, t = [int(idx) for idx in
-                              self.pattern.match(c.ConstrName).groups()]
+                              self.pattern.match(constr.ConstrName).groups()]
                 self.removed.append(((i, j, k), t))
-                self.mdl.remove(c)
+                self.mdl.remove(constr)
 
     def _iterate(self):
         self._find_most_violated_constraints()
@@ -535,9 +535,9 @@ def removed_075(x):
     mbs = []
     for i in range(x):
         print(f'test {i + 1}')
-        mb = MinBisect(n=80, p=.5, q=.2, number_of_cuts=1000)
+        mb = MinBisect(n=40, p=.5, q=.2, number_of_cuts=1000)
         mbs.append(mb)
-        mb.solve_iteratively(method='auto', remove_constraints=True, act_tol=.075)
+        mb.solve_iteratively(method='auto', act_tol=.075)
     return mbs
 
 
@@ -545,14 +545,14 @@ def removed_075(x):
 def removed_05(mbs):
     for i, mb in enumerate(mbs):
         print(f'test {i + 1 + len(mbs)}')
-        mb.solve_iteratively(method='auto', remove_constraints=True, act_tol=.05)
+        mb.solve_iteratively(method='auto', act_tol=.05)
 
 
 # @profile_run_time(sort_by='tottime', lines_to_print=10, strip_dirs=True)
 def removed_025(mbs):
     for i, mb in enumerate(mbs):
         print(f'test {i + 1 + 2*len(mbs)}')
-        mb.solve_iteratively(method='auto', remove_constraints=True, act_tol=.025)
+        mb.solve_iteratively(method='auto', act_tol=.025)
 
 
 if __name__ == '__main__':
