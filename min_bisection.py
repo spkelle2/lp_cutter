@@ -6,6 +6,7 @@ import random
 import re
 from ticdat import TicDatFactory
 import time
+from collections import Counter
 
 # headers for our output files
 solution_schema = TicDatFactory(
@@ -147,8 +148,9 @@ class MinBisect:
         self.threshold_proportion = None
         self.current_threshold = None
         self.keep_iterating = None
-        self.act_tol = .1
-
+        self.act_tol = .001
+        self.s = {}  # cut streaks
+        self.extra_filter = False
 
     @property
     def file_combo(self):
@@ -162,7 +164,8 @@ class MinBisect:
 
     def _instantiate_model(self, solve_type='iterative', warm_start=True,
                            method='dual', min_search_proportion=1,
-                           threshold_proportion=None, act_tol=None):
+                           threshold_proportion=None, act_tol=None,
+                           extra_filter=False):
         """Does everything that solving iteratively and at once will share, e.g.
         instantiating the model object and variables as well as setting the
         objective and equal partition constraint.
@@ -200,8 +203,9 @@ class MinBisect:
         self.threshold_proportion = threshold_proportion
         self.method = method
         self.act_tol = act_tol
+        self.extra_filter = extra_filter
         self.c = create_constraint_indices(self.indices)
-        self.sub_solve_id = -1
+        self.sub_solve_id = 0
         self.cut_size = len(self.c) if self.solve_type == 'once' else \
             floor(self.cut_value * len(self.c)) if self.cut_type == 'proportion' \
             else self.cut_value
@@ -212,6 +216,7 @@ class MinBisect:
         self.current_search_proportion = 1
         self.current_threshold = None
         self.keep_iterating = True
+        self.s = {idx: [] for idx in self.c}
 
         # model
         self.mdl = gu.Model("min bisection")
@@ -233,7 +238,7 @@ class MinBisect:
         self.mdl.addConstr(gu.quicksum(self.x[i, j] for (i, j) in self.x)
                            == self.n ** 2 / 4, name='equal_partitions')
 
-    def _add_triangle_inequality(self, i, j, k, t):
+    def _add_triangle_inequality(self, i, j, k, t, rank=None):
         """Adds a triangle inequality to the model and removes its index from
         future candidate constraints.
 
@@ -261,6 +266,8 @@ class MinBisect:
             self.mdl.addConstr(self.x[i, j] + self.x[i, k] + self.x[j, k] <= 2,
                                name=f'{i}_{j}_{k}_tri4')
         self.c.remove(((i, j, k), t))
+        self.s[(i, j, k), t].append({'start': self.sub_solve_id,
+                                     'end': self.sub_solve_id, 'rank': rank})
 
     def _summary_profile(func):
         """A decorator that is used to collect metadata on once solves
@@ -305,7 +312,6 @@ class MinBisect:
 
         :return:
         """
-        self.sub_solve_id += 1
         if self.write_mps:
             name = f'model_{self.file_combo}_{self.sub_solve_id}'
             self.mdl.write(f'{name}.mps')
@@ -314,6 +320,12 @@ class MinBisect:
         sub_solve_start = time.process_time()
         self.mdl.optimize()
         sub_solve_cpu_time = time.process_time() - sub_solve_start
+        for constr in self.mdl.getConstrs():
+            if constr.ConstrName == 'equal_partitions':
+                continue
+            i, j, k, t = [int(idx) for idx in
+                          self.pattern.match(constr.ConstrName).groups()]
+            self.s[(i, j, k), t][-1]['end'] = self.sub_solve_id
         self.constraints = self.mdl.NumConstrs
         self.variables = self.mdl.NumVars
         self.data.run_stats[self.solve_id, self.solve_type, self.method,
@@ -335,6 +347,7 @@ class MinBisect:
             'variables': self.mdl.NumVars,
             'cpu_time': sub_solve_cpu_time
         }
+        self.sub_solve_id += 1
 
     @_summary_profile
     def solve_once(self, method='auto', run_time_profile_file=None, memory_profile_file=None):
@@ -474,25 +487,40 @@ class MinBisect:
     def _remove_inactive_constraints(self):
         """Removes all constraints from the model which are currently inactive
 
-        :return:
+        :return: a list of indices corresponding to removed constraints
         """
-        self.removed = []
+        removed = []
         for constr in self.mdl.getConstrs():
             if constr.slack > self.act_tol and constr.ConstrName != 'equal_partitions':
                 i, j, k, t = [int(idx) for idx in
                               self.pattern.match(constr.ConstrName).groups()]
-                self.removed.append(((i, j, k), t))
+                removed.append(((i, j, k), t))
                 self.mdl.remove(constr)
+        return removed
 
     def _iterate(self):
+        print(f'iteration {self.sub_solve_id}')
+        if self.act_tol:
+            if self.extra_filter and self.sub_solve_id > 1 and self.d[self.inf[len(self.inf)//2]] < 1:
+                self.cut_size = ceil(.5 * self.cut_value)
+                if self.d[self.inf[0]] < 1:
+                    self.cut_size = ceil(.25 * self.cut_value)
+            self.removed = self._remove_inactive_constraints()
+            # if len(self.removed) > .5*self.cut_size:
+            #     self.cut_size = ceil(.5*self.cut_size)
         self._find_most_violated_constraints()
         if not self.keep_iterating:
+            for k, v in self.s.items():
+                for n, streak in enumerate(v):
+                    self.s[k][n]['run'] = self.s[k][n]['end'] - self.s[k][n]['start'] + 1
             return
-        if self.act_tol:
-            self._remove_inactive_constraints()
-            self.c.update(self.removed)  # add removed constraints back to potential cuts
-        for ((i, j, k), t) in self.inf:
-            self._add_triangle_inequality(i, j, k, t)
+        # add removed constraints back to potential cuts - do they really ever get used again?
+        self.c.update(self.removed)
+        for rank, ((i, j, k), t) in enumerate(self.inf):
+            if self.d[(i, j, k), t] < 1:
+                self._add_triangle_inequality(i, j, k, t, rank)
+            else:
+                self._add_triangle_inequality(i, j, k, t)
         if not self.warm_start:
             self.mdl.reset()
         self._optimize()
@@ -502,8 +530,8 @@ class MinBisect:
     @profile_run_time(sort_by='tottime', lines_to_print=20, strip_dirs=True)
     def solve_iteratively(self, warm_start=True, method='dual',
                           min_search_proportion=1, threshold_proportion=None,
-                          act_tol=None, run_time_profile_file=None,
-                          memory_profile_file=None):
+                          act_tol=None, extra_filter=False,
+                          run_time_profile_file=None, memory_profile_file=None):
         """Solve the model by feeding in only the top most violated constraints,
         and repeat until no violated constraints remain.
         
@@ -515,7 +543,8 @@ class MinBisect:
         :return:
         """
         self._instantiate_model('iterative', warm_start, method,
-                                min_search_proportion, threshold_proportion, act_tol)
+                                min_search_proportion, threshold_proportion,
+                                act_tol, extra_filter)
 
         # Add randomly <self.first_iteration_cuts> of the triangle inequality
         # constraints or just all of them if there's less than <self.first_iteration_cuts>
