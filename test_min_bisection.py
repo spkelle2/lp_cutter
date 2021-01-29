@@ -479,10 +479,10 @@ class TestMinBisection(unittest.TestCase):
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
     def test_solve_iteratively_matches_solve_once_big(self):
-        mb = MinBisect(80, .5, .25, number_of_cuts=400)
+        mb = MinBisect(80, .5, .2, number_of_cuts=1000)
         # mb.solve_once()
         # once_obj = mb.mdl.ObjVal
-        mb.solve_iteratively()
+        # mb.solve_iteratively()
         # self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
         #                 f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
         #
@@ -495,7 +495,7 @@ class TestMinBisection(unittest.TestCase):
         #                 f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
         mb.solve_iteratively(act_tol=.1)
-        mb.solve_iteratively(method='auto', act_tol=.1, extra_filter=True)
+        # mb.solve_iteratively(method='auto', act_tol=.1, extra_filter=True)
         # self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
         #                 f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
