@@ -769,11 +769,11 @@ class TestMinBisection(unittest.TestCase):
         for ((i, j, k), t) in mb.inf:
             mb._add_triangle_inequality(i, j, k, t)
         mb._optimize()
-        mb._remove_inactive_constraints()
+        removed = mb._remove_inactive_constraints()
         mb.d, mb.v = {}, {}
-        self.assertTrue(mb.removed)
+        self.assertTrue(removed)
         for ((i, j, k), t) in create_constraint_indices(range(20)).difference(mb.c):
-            if ((i, j, k), t) in mb.removed:
+            if ((i, j, k), t) in removed:
                 # may need to adjust tolerances here
                 self.assertTrue(mb._get_cut_depth(i, j, k, t) < -mb.act_tol,
                                 'only remove constraints not close to being active')
@@ -793,16 +793,17 @@ class TestMinBisection(unittest.TestCase):
         expected_c = {k for k in mb.c}
 
         # normal iteration
-        mb._remove_inactive_constraints()
-        self.assertTrue(mb.removed)  # need to have some constraints removed for test to work
-        expected_c.update(mb.removed)
+        removed = mb._remove_inactive_constraints()
+        self.assertTrue(removed)  # need to have some constraints removed for test to work
+        expected_c.update(removed)
         mb._find_most_violated_constraints()
         self.assertTrue(mb.inf)  # need to have some upcoming infeasible const for test to work
         with patch.object(mb, '_find_most_violated_constraints') as fmvc, \
                 patch.object(mb, '_add_triangle_inequality') as ati, \
                 patch('min_bisection.gu.Model.reset') as r, \
                 patch.object(mb, '_optimize') as o, \
-                patch.object(mb, '_remove_inactive_constraints') as ric:
+                patch.object(mb, '_remove_inactive_constraints',
+                             return_value=removed) as ric:
             mb._iterate()
             self.assertTrue(fmvc.call_count == 1)
             self.assertTrue(expected_c == mb.c)
@@ -817,8 +818,8 @@ class TestMinBisection(unittest.TestCase):
         for ((i, j, k), t) in random.sample(mb.c, 100):
             mb._add_triangle_inequality(i, j, k, t)
         mb.mdl.optimize()
-        mb._remove_inactive_constraints()
-        self.assertTrue(mb.removed)  # need to have some constraints removed for test to work
+        removed = mb._remove_inactive_constraints()
+        self.assertTrue(removed)  # need to have some constraints removed for test to work
         mb._find_most_violated_constraints()
         self.assertTrue(mb.inf)  # need to have some upcoming infeasible const for test to work
         prev_c = {k for k in mb.c}  # account for mb.ati removing elements
@@ -828,15 +829,16 @@ class TestMinBisection(unittest.TestCase):
                 patch.object(mb, '_add_triangle_inequality') as ati, \
                 patch('min_bisection.gu.Model.reset') as r, \
                 patch.object(mb, '_optimize') as o, \
-                patch.object(mb, '_remove_inactive_constraints') as ric:
+                patch.object(mb, '_remove_inactive_constraints',
+                             return_value=removed) as ric:
             mb.keep_iterating = False
             mb._iterate()
             self.assertTrue(fmvc.call_count == 1)
+            self.assertTrue(ric.call_count == 1)
             self.assertTrue(prev_c == mb.c, 'no cuts should have been removed or added')
             self.assertTrue(ati.call_count == 0)
             self.assertTrue(r.call_count == 0)
             self.assertTrue(o.call_count == 0)
-            self.assertTrue(ric.call_count == 0)
 
     def test_iterate_skips_remove_constraints(self):
         mb = MinBisect(20, .5, .1, number_of_cuts=100)

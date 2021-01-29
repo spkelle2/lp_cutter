@@ -472,25 +472,27 @@ class MinBisect:
                 self.keep_iterating = False
 
     def _remove_inactive_constraints(self):
-        """Removes all constraints from the model which are currently inactive
+        """Removes all constraints from the model which have no reduced cost,
+        i.e. removing the constraint will not change the optimal solution
 
         :return:
         """
-        self.removed = []
+        removed = []
         for constr in self.mdl.getConstrs():
             if constr.slack > self.act_tol and constr.ConstrName != 'equal_partitions':
                 i, j, k, t = [int(idx) for idx in
                               self.pattern.match(constr.ConstrName).groups()]
-                self.removed.append(((i, j, k), t))
+                removed.append(((i, j, k), t))
                 self.mdl.remove(constr)
+        return removed
 
     def _iterate(self):
+        if self.act_tol:
+            self.removed = self._remove_inactive_constraints()
         self._find_most_violated_constraints()
         if not self.keep_iterating:
             return
-        if self.act_tol:
-            self._remove_inactive_constraints()
-            self.c.update(self.removed)  # add removed constraints back to potential cuts
+        self.c.update(self.removed)  # add removed constraints back to potential cuts
         for ((i, j, k), t) in self.inf:
             self._add_triangle_inequality(i, j, k, t)
         if not self.warm_start:
