@@ -8,8 +8,9 @@ import shutil
 import sys
 
 from min_bisection import MinBisect, solution_schema, create_constraint_indices
+from profiler import profile_memory
 
-
+@profile_memory(limit=10, unit='MB')
 def run_experiments(ns, ps, qs, cut_proportions=None, numbers_of_cuts=None,
                     solve_once=True, remove_constraints=None, min_search_proportions=None,
                     threshold_proportions=None, repeats=1, fldr='run_results'):
@@ -104,7 +105,7 @@ if __name__ == '__main__':
         'solve_once': False,
         'remove_constraints': [True],
         'min_search_proportions': [1],
-        'repeats': 1,
+        'repeats': 5,
         'fldr': sys.argv[1],
     }
     run_experiments(**kwargs)
