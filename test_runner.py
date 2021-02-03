@@ -13,7 +13,7 @@ class TestRunExperiments(unittest.TestCase):
     qs = [.1]
     cut_proportions = [.1]
     numbers_of_cuts = [10]
-    act_tols = [.1]
+    remove_constraints = [True]
     repeats = 1
     min_search_proportions = [.1, 1]
     threshold_proportions = [.9]
@@ -34,7 +34,8 @@ class TestRunExperiments(unittest.TestCase):
     def test_saves_exactly_all_run_data(self):
         run_experiments(ns=self.ns, ps=self.ps, qs=self.qs,
                         cut_proportions=self.cut_proportions,
-                        numbers_of_cuts=self.numbers_of_cuts, act_tols=self.act_tols,
+                        numbers_of_cuts=self.numbers_of_cuts,
+                        remove_constraints=self.remove_constraints,
                         min_search_proportions=self.min_search_proportions,
                         threshold_proportions=self.threshold_proportions,
                         repeats=self.repeats, fldr=self.fldr)
@@ -59,7 +60,7 @@ class TestRunExperiments(unittest.TestCase):
         run_experiments(ns=self.ns, ps=self.ps, qs=self.qs,
                         cut_proportions=self.cut_proportions,
                         numbers_of_cuts=self.numbers_of_cuts, solve_once=False,
-                        act_tols=self.act_tols,
+                        remove_constraints=self.remove_constraints,
                         min_search_proportions=self.min_search_proportions,
                         threshold_proportions=self.threshold_proportions,
                         repeats=self.repeats, fldr=self.fldr)

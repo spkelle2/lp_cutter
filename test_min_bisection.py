@@ -311,7 +311,7 @@ class TestMinBisection(unittest.TestCase):
         self.assertTrue([(0, 'once', 'dual', 'cold', 1, None, False)] == list(mb.data.summary_stats.keys()))
         mb.solve_iteratively(min_search_proportion=.1, remove_constraints=True)
         self.assertTrue([(0, 'once', 'dual', 'cold', 1, None, False),
-                         (0, 'iterative', 'dual', 'warm', .1, True, .1)]
+                         (0, 'iterative', 'dual', 'warm', .1, None, True)]
                         == list(mb.data.summary_stats.keys()))
         max_constraints = mb.mdl.NumConstrs
         max_variables = mb.mdl.NumVars
@@ -429,14 +429,14 @@ class TestMinBisection(unittest.TestCase):
         mb.solve_once(method='dual')
         mb.solve_iteratively()
         d = mb.data.run_stats
-        self.assertTrue(d[0, 'iterative', 'dual', 'warm', 1, None, True, 0]['cuts_sought'] ==
-                        d[0, 'iterative', 'dual', 'warm', 1, None, True, 0]['cuts_added'],
+        self.assertTrue(d[0, 'iterative', 'dual', 'warm', 1, None, False, 0]['cuts_sought'] ==
+                        d[0, 'iterative', 'dual', 'warm', 1, None, False, 0]['cuts_added'],
                         'cuts sought and added should be same on first iteration')
-        self.assertTrue(d[0, 'iterative', 'dual', 'warm', 1, None, True, 0]['cuts_sought'] == 20,
+        self.assertTrue(d[0, 'iterative', 'dual', 'warm', 1, None, False, 0]['cuts_sought'] == 20,
                         'cuts first sought should be more than other iterations')
-        self.assertTrue(d[0, 'once', 'dual', 'cold', 1, None, True, 0]['cuts_sought'] ==
-                        d[0, 'once', 'dual', 'cold', 1, None, True, 0]['cuts_added'] == 224)
-        self.assertTrue(d[0, 'iterative', 'dual', 'warm', 1, None, True, 1]['cuts_sought'] == 10)
+        self.assertTrue(d[0, 'once', 'dual', 'cold', 1, None, False, 0]['cuts_sought'] ==
+                        d[0, 'once', 'dual', 'cold', 1, None, False, 0]['cuts_added'] == 224)
+        self.assertTrue(d[0, 'iterative', 'dual', 'warm', 1, None, False, 1]['cuts_sought'] == 10)
 
     def test_solve_once(self):
         a = np.array([[0, 1, 0, 1, 0, 0, 0, 0],
@@ -480,21 +480,21 @@ class TestMinBisection(unittest.TestCase):
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
     def test_solve_iteratively_matches_solve_once_big(self):
-        mb = MinBisect(4, .5, .2, number_of_cuts=1)
+        mb = MinBisect(40, .5, .2, number_of_cuts=1000)
         mb.first_iteration_cuts = 2
         mb.solve_once()
         once_obj = mb.mdl.ObjVal
-        # mb.solve_iteratively()
-        # self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
-        #                 f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
-        #
-        # mb.solve_iteratively(min_search_proportion=.001)
-        # self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
-        #                 f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
-        #
-        # mb.solve_iteratively(threshold_proportion=.9)
-        # self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
-        #                 f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
+        mb.solve_iteratively()
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
+                        f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
+
+        mb.solve_iteratively(min_search_proportion=.001)
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
+                        f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
+
+        mb.solve_iteratively(threshold_proportion=.9)
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
+                        f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
         mb.solve_iteratively(remove_constraints=True)
         self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
@@ -526,7 +526,7 @@ class TestMinBisection(unittest.TestCase):
                             f'slim x[{i, j}] {x[i, j]} but iterative x[{i, j}]'
                             f'{mb.x[i, j].x}')
 
-        # test active constraint tolerance
+        # test remove constraints
         x, obj_val, a = solve_iterative_min_bisect(n=40, p=.5, q=.1, cut_size=100,
                                                    a=mb.a, remove_constraints=True)
         mb.solve_iteratively(method='auto', remove_constraints=True)
@@ -770,28 +770,33 @@ class TestMinBisection(unittest.TestCase):
         mb._find_most_violated_constraints()
         for ((i, j, k), t) in mb.inf:
             mb._add_triangle_inequality(i, j, k, t)
+        original_removed_nonslack = mb.inf[:10]
+        mb.removed_nonslack.update(original_removed_nonslack)
         mb._optimize()
         obj = mb.mdl.ObjVal
         removed = mb._remove_nonreduced_cost_constraints()
         self.assertTrue(removed)
         mb.v = {}
         constrs = set()
-        # all remaining constraints should have a reduced cost, thus be active
         for constr in mb.mdl.getConstrs():
             if constr.ConstrName == 'equal_partitions':
                 continue
             i, j, k, t = [int(idx) for idx in
                           mb.pattern.match(constr.ConstrName).groups()]
             if ((i, j, k), t) in removed:
+                self.assertTrue(((i, j, k), t) not in original_removed_nonslack
+                                or mb._get_cut_depth(i, j, k, t) < -mb.tolerance)
                 self.assertTrue(-mb.tolerance < constr.pi,
                                 'constraint with reduced cost should be kept')
-            constrs.add(((i, j, k), t))
-            self.assertTrue(-mb.tolerance >= constr.pi,
-                            'constraint with no reduced cost should be removed')
-            self.assertTrue(mb.tolerance > constr.slack >= 0,
-                            'constraint with reduced cost should be active')
-            self.assertTrue(1e-10 > mb._get_cut_depth(i, j, k, t) > -mb.tolerance,
-                            'constraint with reduced cost should be active')
+            else:
+                constrs.add(((i, j, k), t))
+                self.assertTrue(-mb.tolerance >= constr.pi or ((i, j, k), t) in
+                                original_removed_nonslack,
+                                'constraint with no reduced cost should be removed')
+                self.assertTrue(mb.tolerance > constr.slack >= 0,
+                                'constraint with reduced cost should be active')
+                self.assertTrue(1e-10 > mb._get_cut_depth(i, j, k, t) > -mb.tolerance,
+                                'constraint with reduced cost should be active')
         # everything not in the model or in unused cuts should be in removed
         self.assertTrue(set.union(mb.c, constrs, removed) ==
                         create_constraint_indices(mb.indices),

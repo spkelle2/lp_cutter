@@ -310,15 +310,12 @@ class MinBisect:
         self.sub_solve_id += 1
         if self.write_mps:
             name = f'model_{self.file_combo}_{self.sub_solve_id}'
-            self.mdl.write(f'cycle_{self.sub_solve_id}.lp')
+            self.mdl.write(f'{name}.mps')
             if self.sub_solve_id > 0 and not self.remove_constraints:
                 self.mdl.write(f'{name}.bas')
         sub_solve_start = time.process_time()
         self.mdl.optimize()
         sub_solve_cpu_time = time.process_time() - sub_solve_start
-        if self.write_mps:
-            self.mdl.write(f'cycle_{self.sub_solve_id}.sol')
-            self.mdl.write(f'cycle_{self.sub_solve_id}.bas')
         self.constraints = self.mdl.NumConstrs
         self.variables = self.mdl.NumVars
         self.data.run_stats[self.solve_id, self.solve_type, self.method,
@@ -577,7 +574,7 @@ if __name__ == '__main__':
     # mb.solve_iteratively(remove_constraints=True,
     #                      first_cuts=[((0, 1, 2), 1), ((0, 1, 2), 2)])
 
-    mb = MinBisect(80, .5, .2, number_of_cuts=1000)
+    mb = MinBisect(40, .5, .2, number_of_cuts=1000)
     print('solving once')
     start = time.time()
     mb.solve_once()

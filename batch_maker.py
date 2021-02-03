@@ -16,4 +16,4 @@ python3 runner.py {base_name}_{n} {n}"""
 
 
 if __name__ == '__main__':
-    make_pbs_files(range(10, 160, 10), 'test_tol')
+    make_pbs_files(range(10, 160, 10), 'remove_once')
