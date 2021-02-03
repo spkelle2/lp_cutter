@@ -10,13 +10,13 @@ import time
 # headers for our output files
 solution_schema = TicDatFactory(
     run_stats=[['solve_id', 'solve_type', 'method', 'warm_start',
-                'min_search_proportion', 'threshold_proportion', 'act_tol',
+                'min_search_proportion', 'threshold_proportion', 'remove_constraints',
                 'sub_solve_id'],
                ['n', 'p', 'q', 'cut_type', 'cut_value', 'cuts_sought',
                 'cuts_added', 'cuts_removed', 'search_proportion_used',
                 'current_threshold', 'variables', 'constraints', 'cpu_time']],
     summary_stats=[['solve_id', 'solve_type', 'method', 'warm_start',
-                    'min_search_proportion', 'threshold_proportion', 'act_tol'],
+                    'min_search_proportion', 'threshold_proportion', 'remove_constraints'],
                    ['n', 'p', 'q', 'cut_type', 'cut_value', 'max_variables',
                     'max_constraints', 'total_cpu_time', 'gurobi_cpu_time',
                     'non_gurobi_cpu_time', 'objective_value']]
@@ -147,7 +147,7 @@ class MinBisect:
         self.threshold_proportion = None
         self.current_threshold = None
         self.keep_iterating = None
-        self.act_tol = .1
+        self.remove_constraints = False
 
 
     @property
@@ -162,7 +162,7 @@ class MinBisect:
 
     def _instantiate_model(self, solve_type='iterative', warm_start=True,
                            method='dual', min_search_proportion=1,
-                           threshold_proportion=None, act_tol=None):
+                           threshold_proportion=None, remove_constraints=False):
         """Does everything that solving iteratively and at once will share, e.g.
         instantiating the model object and variables as well as setting the
         objective and equal partition constraint.
@@ -179,6 +179,8 @@ class MinBisect:
         up to the next largest inverse power of 10. For example, .02 becomes .1.
         :param threshold_proportion: if in (0, 1), what proportion of current infeasible
         cuts must a cut be deeper than to be added to the model when solved iteratively
+        :param remove_constraints: whether or not to remove constraints deemed
+        as not useful for solving subsequent iterations
 
         Note: it is intended for the user to use at most one of min_search_proportion
         and threshold_proportion as they are not designed to be used at the same time.
@@ -192,14 +194,14 @@ class MinBisect:
         assert 0 < min_search_proportion <= 1
         assert threshold_proportion is None or (0 < threshold_proportion < 1)
         assert min_search_proportion == 1 or threshold_proportion is None, 'not both'
-        assert act_tol is None or (0 <= act_tol <= 2), 'slack cant be more than 2 for given constraints'
+        assert isinstance(remove_constraints, bool)
 
         self.solve_type = solve_type
         self.warm_start = warm_start
         self.min_search_proportion = min_search_proportion
         self.threshold_proportion = threshold_proportion
         self.method = method
-        self.act_tol = act_tol
+        self.remove_constraints = remove_constraints
         self.c = create_constraint_indices(self.indices)
         self.sub_solve_id = -1
         self.cut_size = len(self.c) if self.solve_type == 'once' else \
@@ -275,15 +277,15 @@ class MinBisect:
             # sum over sub solve indices for this combination of solve
             # solve_id, solve_type, method, warm_start, sub_solve_id
             gurobi_cpu_time = sum(
-                d['cpu_time'] for (si, st, m, ws, msp, tp, at, ssi), d in
+                d['cpu_time'] for (si, st, m, ws, msp, tp, rc, ssi), d in
                 self.data.run_stats.items() if self.solve_type == st and
                 self.method == m and self.warm_str == ws and
                 self.min_search_proportion == msp and self.threshold_proportion == tp
-                and self.act_tol == at
+                and self.remove_constraints == rc
             )
             self.data.summary_stats[self.solve_id, self.solve_type, self.method,
                                     self.warm_str, self.min_search_proportion,
-                                    self.threshold_proportion, self.act_tol] = {
+                                    self.threshold_proportion, self.remove_constraints] = {
                 'n': self.n,
                 'p': self.p,
                 'q': self.q,
@@ -318,7 +320,7 @@ class MinBisect:
         self.variables = self.mdl.NumVars
         self.data.run_stats[self.solve_id, self.solve_type, self.method,
                             self.warm_str, self.min_search_proportion,
-                            self.threshold_proportion, self.act_tol,
+                            self.threshold_proportion, self.remove_constraints,
                             self.sub_solve_id] = {
             'n': self.n,
             'p': self.p,
@@ -471,15 +473,16 @@ class MinBisect:
             if not self.inf:
                 self.keep_iterating = False
 
-    def _remove_inactive_constraints(self):
+    def _remove_constraints(self):
         """Removes all constraints from the model which have no reduced cost,
         i.e. removing the constraint will not change the optimal solution
 
-        :return:
+        :return removed: a list of the removed constraints
         """
         removed = []
         for constr in self.mdl.getConstrs():
-            if constr.slack > self.act_tol and constr.ConstrName != 'equal_partitions':
+            # if constr.pi < -self.tolerance
+            if constr.slack > self.tolerance and constr.ConstrName != 'equal_partitions':
                 i, j, k, t = [int(idx) for idx in
                               self.pattern.match(constr.ConstrName).groups()]
                 removed.append(((i, j, k), t))
@@ -487,8 +490,15 @@ class MinBisect:
         return removed
 
     def _iterate(self):
-        if self.act_tol:
-            self.removed = self._remove_inactive_constraints()
+        """Complete one iteration of an iterative solve. This method includes:
+        * removing constraints deemed not needed
+        * adding the most violated outstanding constraints
+        * resolving the new model if new constraints added
+
+        :return:
+        """
+        if self.remove_constraints:
+            self.removed = self._remove_constraints()
         self._find_most_violated_constraints()
         if not self.keep_iterating:
             return
@@ -504,7 +514,7 @@ class MinBisect:
     @profile_run_time(sort_by='tottime', lines_to_print=20, strip_dirs=True)
     def solve_iteratively(self, warm_start=True, method='dual',
                           min_search_proportion=1, threshold_proportion=None,
-                          act_tol=None, run_time_profile_file=None,
+                          remove_constraints=False, run_time_profile_file=None,
                           memory_profile_file=None):
         """Solve the model by feeding in only the top most violated constraints,
         and repeat until no violated constraints remain.
@@ -517,7 +527,8 @@ class MinBisect:
         :return:
         """
         self._instantiate_model('iterative', warm_start, method,
-                                min_search_proportion, threshold_proportion, act_tol)
+                                min_search_proportion, threshold_proportion,
+                                remove_constraints)
 
         # Add randomly <self.first_iteration_cuts> of the triangle inequality
         # constraints or just all of them if there's less than <self.first_iteration_cuts>
@@ -533,35 +544,28 @@ class MinBisect:
 
 
 # @profile_run_time(sort_by='tottime', lines_to_print=10, strip_dirs=True)
-def removed_075(x):
+def removed(x):
     mbs = []
     for i in range(x):
         print(f'test {i + 1}')
         mb = MinBisect(n=40, p=.5, q=.2, number_of_cuts=1000)
         mbs.append(mb)
-        mb.solve_iteratively(method='auto', act_tol=.075)
+        mb.solve_iteratively(method='auto', remove_constraints=True)
     return mbs
 
 
 # @profile_run_time(sort_by='tottime', lines_to_print=10, strip_dirs=True)
-def removed_05(mbs):
+def non_removed(mbs):
     for i, mb in enumerate(mbs):
         print(f'test {i + 1 + len(mbs)}')
-        mb.solve_iteratively(method='auto', act_tol=.05)
+        mb.solve_iteratively(method='auto')
 
-
-# @profile_run_time(sort_by='tottime', lines_to_print=10, strip_dirs=True)
-def removed_025(mbs):
-    for i, mb in enumerate(mbs):
-        print(f'test {i + 1 + 2*len(mbs)}')
-        mb.solve_iteratively(method='auto', act_tol=.025)
 
 
 if __name__ == '__main__':
 
-    mbs = removed_075(1)
-    removed_05(mbs)
-    removed_025(mbs)
+    mbs = removed(1)
+    non_removed(mbs)
 
     # print run stats
     # solution_schema.csv.write_directory(mb.data, 'test_results', allow_overwrite=True)
