@@ -1,3 +1,0 @@
-solve_id,solve_type,method,warm_start,min_search_proportion,threshold_proportion,n,p,q,cut_type,cut_value,max_variables,max_constraints,total_cpu_time,gurobi_cpu_time,non_gurobi_cpu_time,objective_value
-34,once,auto,cold,1,,70,0.5,0.2,fixed,10,2415,218961,178.30895970700112,167.9726671699991,10.33629253700201,236.00000000000117
-34,iterative,auto,warm,1,,70,0.5,0.2,fixed,10,2415,3961,456.96761736400003,217.54026636198068,239.42735100201935,236.00000000000244
