@@ -8,6 +8,7 @@ def make_pbs_files(ns, base_name):
 #PBS -q {'verylong' if n > 150 else 'long' if n > 50 else 'medium'}
 
 cd /home/sek519/lp_cutter
+source /home/sek519/miniconda/bin/activate
 conda activate lp_cutter
 python runner.py {base_name}_{n} {n}"""
         text_file = open(f"{base_name}_{n}.pbs", "w")
