@@ -484,7 +484,7 @@ class MinBisect:
         removed = []
         for constr in self.mdl.getConstrs():
             # ignore if not an added cut with ~0 dual value
-            if constr.ConstrName == 'equal_partitions' or constr.pi <= -self.tolerance:
+            if constr.ConstrName == 'equal_partitions' or constr.pi <= -1e-10:
                 continue
             i, j, k, t = [int(idx) for idx in
                           self.pattern.match(constr.ConstrName).groups()]

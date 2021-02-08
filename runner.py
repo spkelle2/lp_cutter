@@ -102,9 +102,9 @@ if __name__ == '__main__':
         'qs': [.2],
         'numbers_of_cuts': [1000],
         'solve_once': False,
-        'remove_constraints': [True],
+        'remove_constraints': [False],
         'min_search_proportions': [1],
-        'repeats': 5,
+        'repeats': 20,
         'fldr': sys.argv[1],
     }
     run_experiments(**kwargs)

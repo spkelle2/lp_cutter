@@ -786,11 +786,11 @@ class TestMinBisection(unittest.TestCase):
             if ((i, j, k), t) in removed:
                 self.assertTrue(((i, j, k), t) not in original_removed_nonslack
                                 or mb._get_cut_depth(i, j, k, t) < -mb.tolerance)
-                self.assertTrue(-mb.tolerance < constr.pi,
+                self.assertTrue(-1e-10 < constr.pi,
                                 'constraint with reduced cost should be kept')
             else:
                 constrs.add(((i, j, k), t))
-                self.assertTrue(-mb.tolerance >= constr.pi or ((i, j, k), t) in
+                self.assertTrue(-1e-10 >= constr.pi or ((i, j, k), t) in
                                 original_removed_nonslack,
                                 'constraint with no reduced cost should be removed')
                 self.assertTrue(mb.tolerance > constr.slack >= 0,
