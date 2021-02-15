@@ -11,12 +11,14 @@ import time
 solution_schema = TicDatFactory(
     run_stats=[['solve_id', 'solve_type', 'method', 'warm_start',
                 'min_search_proportion', 'threshold_proportion', 'remove_constraints',
-                'sub_solve_id'],
+                'zero_slack_likelihood', 'sub_solve_id'],
                ['n', 'p', 'q', 'cut_type', 'cut_value', 'cuts_sought',
                 'cuts_added', 'cuts_removed', 'search_proportion_used',
-                'current_threshold', 'variables', 'constraints', 'cpu_time']],
+                'current_threshold', 'variables',
+                'constraints', 'cpu_time']],
     summary_stats=[['solve_id', 'solve_type', 'method', 'warm_start',
-                    'min_search_proportion', 'threshold_proportion', 'remove_constraints'],
+                    'min_search_proportion', 'threshold_proportion', 'remove_constraints',
+                    'zero_slack_likelihood'],
                    ['n', 'p', 'q', 'cut_type', 'cut_value', 'max_variables',
                     'max_constraints', 'total_cpu_time', 'gurobi_cpu_time',
                     'non_gurobi_cpu_time', 'objective_value']]
@@ -148,6 +150,8 @@ class MinBisect:
         self.current_threshold = None
         self.keep_iterating = None
         self.remove_constraints = False
+        self.removed_nonslack = None
+        self.zero_slack_likelihood = None
 
 
     @property
@@ -162,7 +166,8 @@ class MinBisect:
 
     def _instantiate_model(self, solve_type='iterative', warm_start=True,
                            method='dual', min_search_proportion=1,
-                           threshold_proportion=None, remove_constraints=False):
+                           threshold_proportion=None, remove_constraints=False,
+                           zero_slack_likelihood=0):
         """Does everything that solving iteratively and at once will share, e.g.
         instantiating the model object and variables as well as setting the
         objective and equal partition constraint.
@@ -181,6 +186,8 @@ class MinBisect:
         cuts must a cut be deeper than to be added to the model when solved iteratively
         :param remove_constraints: whether or not to remove constraints deemed
         as not useful for solving subsequent iterations
+        :param zero_slack_likelihood: likelihood we remove a constraint with a
+        dual value of 0 but also 0 slack.
 
         Note: it is intended for the user to use at most one of min_search_proportion
         and threshold_proportion as they are not designed to be used at the same time.
@@ -195,6 +202,7 @@ class MinBisect:
         assert threshold_proportion is None or (0 < threshold_proportion < 1)
         assert min_search_proportion == 1 or threshold_proportion is None, 'not both'
         assert isinstance(remove_constraints, bool)
+        assert 0 <= zero_slack_likelihood <= 1
 
         self.solve_type = solve_type
         self.warm_start = warm_start
@@ -202,6 +210,7 @@ class MinBisect:
         self.threshold_proportion = threshold_proportion
         self.method = method
         self.remove_constraints = remove_constraints
+        self.zero_slack_likelihood = zero_slack_likelihood
         self.c = create_constraint_indices(self.indices)
         self.sub_solve_id = -1
         self.cut_size = len(self.c) if self.solve_type == 'once' else \
@@ -214,6 +223,7 @@ class MinBisect:
         self.current_search_proportion = 1
         self.current_threshold = None
         self.keep_iterating = True
+        self.removed_nonslack = set()
 
         # model
         self.mdl = gu.Model("min bisection")
@@ -277,15 +287,16 @@ class MinBisect:
             # sum over sub solve indices for this combination of solve
             # solve_id, solve_type, method, warm_start, sub_solve_id
             gurobi_cpu_time = sum(
-                d['cpu_time'] for (si, st, m, ws, msp, tp, rc, ssi), d in
+                d['cpu_time'] for (si, st, m, ws, msp, tp, rc, zsl, ssi), d in
                 self.data.run_stats.items() if self.solve_type == st and
                 self.method == m and self.warm_str == ws and
                 self.min_search_proportion == msp and self.threshold_proportion == tp
-                and self.remove_constraints == rc
+                and self.remove_constraints == rc and self.zero_slack_likelihood == zsl
             )
             self.data.summary_stats[self.solve_id, self.solve_type, self.method,
                                     self.warm_str, self.min_search_proportion,
-                                    self.threshold_proportion, self.remove_constraints] = {
+                                    self.threshold_proportion, self.remove_constraints,
+                                    self.zero_slack_likelihood] = {
                 'n': self.n,
                 'p': self.p,
                 'q': self.q,
@@ -321,7 +332,7 @@ class MinBisect:
         self.data.run_stats[self.solve_id, self.solve_type, self.method,
                             self.warm_str, self.min_search_proportion,
                             self.threshold_proportion, self.remove_constraints,
-                            self.sub_solve_id] = {
+                            self.zero_slack_likelihood, self.sub_solve_id] = {
             'n': self.n,
             'p': self.p,
             'q': self.q,
@@ -481,10 +492,17 @@ class MinBisect:
         """
         removed = []
         for constr in self.mdl.getConstrs():
-            # if constr.pi < -self.tolerance
-            if constr.slack > self.tolerance and constr.ConstrName != 'equal_partitions':
-                i, j, k, t = [int(idx) for idx in
-                              self.pattern.match(constr.ConstrName).groups()]
+            # ignore if not an added cut with ~0 dual value
+            if constr.ConstrName == 'equal_partitions' or constr.pi <= -1e-10:
+                continue
+            i, j, k, t = [int(idx) for idx in
+                          self.pattern.match(constr.ConstrName).groups()]
+            dual_0_removable = ((i, j, k), t) not in self.removed_nonslack and \
+                np.random.uniform() < self.zero_slack_likelihood
+            # remove if there is slack or if this is a zero dual that can go
+            if constr.slack > self.tolerance or dual_0_removable:
+                if constr.slack <= self.tolerance and dual_0_removable:
+                    self.removed_nonslack.add(((i, j, k), t))
                 removed.append(((i, j, k), t))
                 self.mdl.remove(constr)
         return removed
@@ -514,8 +532,8 @@ class MinBisect:
     @profile_run_time(sort_by='tottime', lines_to_print=20, strip_dirs=True)
     def solve_iteratively(self, warm_start=True, method='dual',
                           min_search_proportion=1, threshold_proportion=None,
-                          remove_constraints=False, run_time_profile_file=None,
-                          memory_profile_file=None):
+                          remove_constraints=False, zero_slack_likelihood=0,
+                          run_time_profile_file=None, memory_profile_file=None):
         """Solve the model by feeding in only the top most violated constraints,
         and repeat until no violated constraints remain.
         
@@ -528,7 +546,7 @@ class MinBisect:
         """
         self._instantiate_model('iterative', warm_start, method,
                                 min_search_proportion, threshold_proportion,
-                                remove_constraints)
+                                remove_constraints, zero_slack_likelihood)
 
         # Add randomly <self.first_iteration_cuts> of the triangle inequality
         # constraints or just all of them if there's less than <self.first_iteration_cuts>
@@ -559,7 +577,6 @@ def non_removed(mbs):
     for i, mb in enumerate(mbs):
         print(f'test {i + 1 + len(mbs)}')
         mb.solve_iteratively(method='auto')
-
 
 
 if __name__ == '__main__':

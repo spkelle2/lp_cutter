@@ -211,7 +211,7 @@ class TestMinBisection(unittest.TestCase):
         mb = MinBisect(8, .5, .1, number_of_cuts=100)
         mb._instantiate_model(solve_type='iterative', warm_start=True, method='dual',
                               min_search_proportion=1, threshold_proportion=None,
-                              remove_constraints=True)
+                              remove_constraints=True, zero_slack_likelihood=.2)
 
         self.assertTrue(mb.solve_type == 'iterative')
         self.assertTrue(mb.warm_start)
@@ -224,6 +224,7 @@ class TestMinBisection(unittest.TestCase):
         self.assertTrue(mb.current_threshold is None)
         self.assertTrue(mb.keep_iterating)
         self.assertTrue(mb.remove_constraints)
+        self.assertTrue(mb.zero_slack_likelihood == .2)
 
     def test_instantiate_model_passes_asserts(self):
         mb = MinBisect(8, .5, .1, number_of_cuts=100)
@@ -249,6 +250,10 @@ class TestMinBisection(unittest.TestCase):
                           solve_type='iterative', warm_start=True, method='auto',
                           min_search_proportion=1, threshold_proportion=None,
                           remove_constraints='False')
+        self.assertRaises(AssertionError, mb._instantiate_model,
+                          solve_type='iterative', warm_start=True, method='auto',
+                          min_search_proportion=1, threshold_proportion=None,
+                          remove_constraints=True, zero_slack_likelihood=2)
 
     def test_add_triangle_inequality_adds_constraint_removes_index(self):
         mb = MinBisect(8, .5, .1, .1)
@@ -308,10 +313,11 @@ class TestMinBisection(unittest.TestCase):
     def test_summary_profile(self):
         mb = MinBisect(30, .5, .1, number_of_cuts=100)
         mb.solve_once('dual')
-        self.assertTrue([(0, 'once', 'dual', 'cold', 1, None, False)] == list(mb.data.summary_stats.keys()))
-        mb.solve_iteratively(min_search_proportion=.1, remove_constraints=True)
-        self.assertTrue([(0, 'once', 'dual', 'cold', 1, None, False),
-                         (0, 'iterative', 'dual', 'warm', .1, None, True)]
+        self.assertTrue([(0, 'once', 'dual', 'cold', 1, None, False, 0)] == list(mb.data.summary_stats.keys()))
+        mb.solve_iteratively(min_search_proportion=.1, remove_constraints=True,
+                             zero_slack_likelihood=.2)
+        self.assertTrue([(0, 'once', 'dual', 'cold', 1, None, False, 0),
+                         (0, 'iterative', 'dual', 'warm', .1, None, True, .2)]
                         == list(mb.data.summary_stats.keys()))
         max_constraints = mb.mdl.NumConstrs
         max_variables = mb.mdl.NumVars
@@ -323,7 +329,7 @@ class TestMinBisection(unittest.TestCase):
         mb.solve_iteratively(warm_start=False, method='auto')
         self.assertTrue(solution_schema.good_tic_dat_object(mb.data))
 
-        data = mb.data.summary_stats[0, 'iterative', 'dual', 'warm', .1, None, True]
+        data = mb.data.summary_stats[0, 'iterative', 'dual', 'warm', .1, None, True, .2]
         self.assertTrue(data['n'] == 30)
         self.assertTrue(data['p'] == .5)
         self.assertTrue(data['q'] == .1)
@@ -334,9 +340,9 @@ class TestMinBisection(unittest.TestCase):
         self.assertTrue(data['total_cpu_time'] >= data['gurobi_cpu_time'])
         self.assertTrue(data['total_cpu_time'] >= data['non_gurobi_cpu_time'])
         gurobi_cpu_time = sum(
-            d['cpu_time'] for (si, st, m, ws, msp, tp, rc, ssi), d in
+            d['cpu_time'] for (si, st, m, ws, msp, tp, rc, zsl, ssi), d in
             mb.data.run_stats.items() if st == 'iterative' and m == 'dual' and
-            ws == 'warm' and msp == .1 and tp is None and rc
+            ws == 'warm' and msp == .1 and tp is None and rc and zsl == .2
         )
         self.assertTrue(data['gurobi_cpu_time'] == gurobi_cpu_time)
         self.assertTrue(data['total_cpu_time'] == data['gurobi_cpu_time'] + data['non_gurobi_cpu_time'])
@@ -356,7 +362,7 @@ class TestMinBisection(unittest.TestCase):
         mb = MinBisect(8, .5, .1, .1, write_mps=True)
         mb._instantiate_model()
         mb._optimize()
-        self.assertTrue([(0, 'iterative', 'dual', 'warm', 1, None, False, 0)] ==
+        self.assertTrue([(0, 'iterative', 'dual', 'warm', 1, None, False, 0, 0)] ==
                         list(mb.data.run_stats.keys()))
 
         # tests adds a second correctly
@@ -364,20 +370,20 @@ class TestMinBisection(unittest.TestCase):
         mb.inf = [((i, j, k), t)]
         mb._add_triangle_inequality(i, j, k, t)
         mb._optimize()
-        self.assertTrue([(0, 'iterative', 'dual', 'warm', 1, None, False, 0),
-                         (0, 'iterative', 'dual', 'warm', 1, None, False, 1)]
+        self.assertTrue([(0, 'iterative', 'dual', 'warm', 1, None, False, 0, 0),
+                         (0, 'iterative', 'dual', 'warm', 1, None, False, 0, 1)]
                         == list(mb.data.run_stats.keys()))
 
         # tests adds all at once solve correctly
         mb.solve_once(method='dual')
-        self.assertTrue([(0, 'iterative', 'dual', 'warm', 1, None, False, 0),
-                         (0, 'iterative', 'dual', 'warm', 1, None, False, 1),
-                         (0, 'once', 'dual', 'cold', 1, None, False, 0)] ==
+        self.assertTrue([(0, 'iterative', 'dual', 'warm', 1, None, False, 0, 0),
+                         (0, 'iterative', 'dual', 'warm', 1, None, False, 0, 1),
+                         (0, 'once', 'dual', 'cold', 1, None, False, 0, 0)] ==
                         list(mb.data.run_stats.keys()))
         self.assertTrue(solution_schema.good_tic_dat_object(mb.data))
 
         # check data filled out as expected
-        data = mb.data.run_stats[0, 'iterative', 'dual', 'warm', 1, None, False, 1]
+        data = mb.data.run_stats[0, 'iterative', 'dual', 'warm', 1, None, False, 0, 1]
         self.assertTrue(data['n'] == 8)
         self.assertTrue(data['p'] == .5)
         self.assertTrue(data['q'] == .1)
@@ -402,10 +408,10 @@ class TestMinBisection(unittest.TestCase):
 
     def test_optimize_captures_correct_cuts(self):
         mb = MinBisect(20, .5, .1, number_of_cuts=100, first_iteration_cuts=500)
-        mb.solve_iteratively(remove_constraints=True)
+        mb.solve_iteratively(remove_constraints=True, zero_slack_likelihood=.2)
 
         # first iteration should match the fixed number provided
-        data = mb.data.run_stats[0, 'iterative', 'dual', 'warm', 1, None, True, 0]
+        data = mb.data.run_stats[0, 'iterative', 'dual', 'warm', 1, None, True, .2, 0]
         self.assertTrue(data['cuts_added'] == 500)
         self.assertTrue(data['cuts_sought'] == 500)
         self.assertTrue(data['constraints'] == 501)
@@ -414,7 +420,7 @@ class TestMinBisection(unittest.TestCase):
         pc = data['constraints']
 
         # (second and) third iteration should match number of cuts
-        data = mb.data.run_stats[0, 'iterative', 'dual', 'warm', 1, None, True, 1]
+        data = mb.data.run_stats[0, 'iterative', 'dual', 'warm', 1, None, True, .2, 1]
         self.assertTrue(data['cuts_added'] == 100)
         self.assertTrue(data['cuts_sought'] == 100)
         self.assertTrue(data['cuts_removed'] > 100,
@@ -429,14 +435,14 @@ class TestMinBisection(unittest.TestCase):
         mb.solve_once(method='dual')
         mb.solve_iteratively()
         d = mb.data.run_stats
-        self.assertTrue(d[0, 'iterative', 'dual', 'warm', 1, None, False, 0]['cuts_sought'] ==
-                        d[0, 'iterative', 'dual', 'warm', 1, None, False, 0]['cuts_added'],
+        self.assertTrue(d[0, 'iterative', 'dual', 'warm', 1, None, False, 0, 0]['cuts_sought'] ==
+                        d[0, 'iterative', 'dual', 'warm', 1, None, False, 0, 0]['cuts_added'],
                         'cuts sought and added should be same on first iteration')
-        self.assertTrue(d[0, 'iterative', 'dual', 'warm', 1, None, False, 0]['cuts_sought'] == 20,
+        self.assertTrue(d[0, 'iterative', 'dual', 'warm', 1, None, False, 0, 0]['cuts_sought'] == 20,
                         'cuts first sought should be more than other iterations')
-        self.assertTrue(d[0, 'once', 'dual', 'cold', 1, None, False, 0]['cuts_sought'] ==
-                        d[0, 'once', 'dual', 'cold', 1, None, False, 0]['cuts_added'] == 224)
-        self.assertTrue(d[0, 'iterative', 'dual', 'warm', 1, None, False, 1]['cuts_sought'] == 10)
+        self.assertTrue(d[0, 'once', 'dual', 'cold', 1, None, False, 0, 0]['cuts_sought'] ==
+                        d[0, 'once', 'dual', 'cold', 1, None, False, 0, 0]['cuts_added'] == 224)
+        self.assertTrue(d[0, 'iterative', 'dual', 'warm', 1, None, False, 0, 1]['cuts_sought'] == 10)
 
     def test_solve_once(self):
         a = np.array([[0, 1, 0, 1, 0, 0, 0, 0],
@@ -479,6 +485,10 @@ class TestMinBisection(unittest.TestCase):
         self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
+        mb.solve_iteratively(remove_constraints=True, zero_slack_likelihood=.2)
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
+                        f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
+
     def test_solve_iteratively_matches_solve_once_big(self):
         mb = MinBisect(40, .5, .1, number_of_cuts=100)
         mb.solve_once()
@@ -496,6 +506,10 @@ class TestMinBisection(unittest.TestCase):
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
         mb.solve_iteratively(remove_constraints=True)
+        self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
+                        f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
+
+        mb.solve_iteratively(remove_constraints=True, zero_slack_likelihood=.2)
         self.assertTrue(isclose(once_obj, mb.mdl.ObjVal, abs_tol=.0001),
                         f'one go obj {once_obj} but iterative obj {mb.mdl.ObjVal}')
 
@@ -762,7 +776,54 @@ class TestMinBisection(unittest.TestCase):
 
     def test_remove_constraints(self):
         mb = MinBisect(20, .5, .1, number_of_cuts=100)
-        mb._instantiate_model(remove_constraints=True)
+        mb._instantiate_model(remove_constraints=True, zero_slack_likelihood=.2)
+        for ((i, j, k), t) in random.sample(mb.c, 100):
+            mb._add_triangle_inequality(i, j, k, t)
+        mb.mdl.optimize()
+        mb._find_most_violated_constraints()
+        for ((i, j, k), t) in mb.inf:
+            mb._add_triangle_inequality(i, j, k, t)
+        mb._optimize()
+        removed = mb._remove_constraints()
+        kept_nonslack = []
+        mb.d, mb.v = {}, {}
+        self.assertTrue(removed)
+        for ((i, j, k), t) in create_constraint_indices(range(20)).difference(mb.c):
+            if ((i, j, k), t) in removed:
+                has_slack = mb._get_cut_depth(i, j, k, t) < -mb.tolerance
+                has_no_dual = -1e-10 < mb.mdl.getConstrByName(f'{i}_{j}_{k}_tri{t}').pi <= 0
+                in_removed_nonslack = ((i, j, k), t) in mb.removed_nonslack
+                # may need to adjust tolerances here
+                self.assertTrue(has_slack or (has_no_dual and in_removed_nonslack),
+                                'only remove constraints not close to being active '
+                                'or those with no dual that were removed otherwise')
+                self.assertFalse(has_slack and in_removed_nonslack,
+                                'no constraint with slack should end up in removed_nonslack')
+            else:
+                constr = mb.mdl.getConstrByName(f'{i}_{j}_{k}_tri{t}')
+                self.assertTrue(1e-10 >= mb._get_cut_depth(i, j, k, t) >= -mb.tolerance,
+                                'constraints not close to active should be removed')
+                # find amount of removable nonslack kept
+                if constr.pi > -1e-10:
+                    kept_nonslack.append(constr)
+        self.assertTrue(3*len(mb.removed_nonslack) < len(kept_nonslack) < 10*len(mb.removed_nonslack),
+                        'we should pull 10% to 30% of constraints if using 20% threshold')
+        mb.mdl.update()
+        for ((i, j, k), t) in create_constraint_indices(range(20)).difference(mb.c):
+            if ((i, j, k), t) in removed:
+                # make sure those in removed list were pulled from model
+                self.assertFalse(mb.mdl.getConstrByName(f'{i}_{j}_{k}_tri{t}'),
+                                 'this one should have been removed')
+            else:
+                # make sure those not stayed
+                self.assertTrue(mb.mdl.getConstrByName(f'{i}_{j}_{k}_tri{t}'),
+                                'this one should have stayed')
+
+    def test_remove_constraints_ignores_previously_removed_nonslack(self):
+        mb = MinBisect(20, .5, .1, number_of_cuts=100)
+        mb._instantiate_model(remove_constraints=True, zero_slack_likelihood=.2)
+        original_removed_nonslack = set(random.sample(mb.c, 1000))
+        mb.removed_nonslack.update(original_removed_nonslack)
         for ((i, j, k), t) in random.sample(mb.c, 100):
             mb._add_triangle_inequality(i, j, k, t)
         mb.mdl.optimize()
@@ -775,14 +836,12 @@ class TestMinBisection(unittest.TestCase):
         self.assertTrue(removed)
         for ((i, j, k), t) in create_constraint_indices(range(20)).difference(mb.c):
             if ((i, j, k), t) in removed:
+                has_slack = mb._get_cut_depth(i, j, k, t) < -mb.tolerance
+                in_original_removed_nonslack = ((i, j, k), t) in original_removed_nonslack
                 # may need to adjust tolerances here
-                self.assertTrue(mb._get_cut_depth(i, j, k, t) < -mb.tolerance,
-                                'only remove constraints not close to being active')
-            else:
-                self.assertTrue(mb.mdl.getConstrByName(f'{i}_{j}_{k}_tri{t}'),
-                                'if not in c, it should be in the model since not removed')
-                self.assertTrue(1e-10 >= mb._get_cut_depth(i, j, k, t) >= -mb.tolerance,
-                                'constraints close to active should be left')
+                self.assertTrue(has_slack or not in_original_removed_nonslack,
+                                'constraint must have slack or not have been '
+                                'removed for nonslack before')
 
     def test_iterate(self):
         mb = MinBisect(20, .5, .1, number_of_cuts=100)
