@@ -114,7 +114,7 @@ if __name__ == '__main__':
         'min_search_proportions': [1],
         'remove_constraint_list': [False, True],
         'zero_slack_likelihoods': [0, .1, .3],
-        'repeats': 3,
+        'repeats': 50,
         'fldr': sys.argv[1],
     }
     run_experiments(**kwargs)
