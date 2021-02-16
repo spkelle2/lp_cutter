@@ -4,7 +4,7 @@ def make_pbs_files(ns, base_name):
         txt = f"""#PBS -N {base_name}_{n}
 #PBS -e /home/sek519/lp_cutter/{base_name}_{n}.err
 #PBS -o /home/sek519/lp_cutter/{base_name}_{n}.out
-#PBS -l ncpus=4,mem=4gb,vmem=6gb
+#PBS -l ncpus=4,mem=20gb,vmem=30gb
 #PBS -q {'verylong' if n > 150 else 'long' if n > 50 else 'medium'}
 
 cd /home/sek519/lp_cutter
