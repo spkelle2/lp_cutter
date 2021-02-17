@@ -9,7 +9,7 @@ from profiler import profile_run_time
 
 # @profile_run_time(sort_by='tottime', lines_to_print=20, strip_dirs=True)
 def solve_iterative_min_bisect(n, p, q, cut_size, threshold_proportion=None,
-                               a=None, act_tol=None):
+                               a=None, remove_constraints=False):
     """for a given n, p, q, cut_size, and optional threshold_proportion, run an
     iterative solve. Optionally accepts the adjacency matrix used in another run
     for comparison. If given a threshold_proportion, will only search through
@@ -143,9 +143,10 @@ def solve_iterative_min_bisect(n, p, q, cut_size, threshold_proportion=None,
                 x = {(i, j): v.x for (i, j), v in x.items()}
                 return x, mdl.ObjVal, a
 
-        if act_tol:
+        if remove_constraints:
             for constr in mdl.getConstrs():
-                if constr.slack > act_tol and constr.ConstrName != 'equal_partitions':
+                # constr.pi > -tolerance
+                if constr.slack > tolerance and constr.ConstrName != 'equal_partitions':
                     i, j, k, t = [int(idx) for idx in
                                   pattern.match(constr.ConstrName).groups()]
                     c.add(((i, j, k), t))
@@ -161,11 +162,11 @@ def profilable_slim(mbs):
     for i, mb in enumerate(mbs):
         print(f'test {i + 1 + len(mbs)}')
         solve_iterative_min_bisect(n=mb.n, p=mb.p, q=mb.q, cut_size=mb.cut_size,
-                                   a=mb.a, act_tol=mb.act_tol)
+                                   a=mb.a, remove_constraints=True)
 
 
 if __name__ == '__main__':
-    from min_bisection import removed_075
-    mbs = removed_075(1)
+    from min_bisection import removed
+    mbs = removed(1)
     profilable_slim(mbs)
 

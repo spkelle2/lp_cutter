@@ -11,8 +11,9 @@ from min_bisection import MinBisect, solution_schema, create_constraint_indices
 
 
 def run_experiments(ns, ps, qs, cut_proportions=None, numbers_of_cuts=None,
-                    solve_once=True, act_tols=None, min_search_proportions=None,
-                    threshold_proportions=None, repeats=1, fldr='run_results'):
+                    solve_once=True, min_search_proportions=None,
+                    threshold_proportions=None, remove_constraint_list=None,
+                    zero_slack_likelihoods=None, repeats=1, fldr='run_results'):
     """Solve all at once and solve iteratively the min bisection problem
     <repeats> times for each combo of n, p, q, and cut_proportion/number_of_cuts.
 
@@ -22,8 +23,6 @@ def run_experiments(ns, ps, qs, cut_proportions=None, numbers_of_cuts=None,
     :param cut_proportions: list of cut proportions to try for each n, p, q combo
     :param numbers_of_cuts: list of fixed number of cuts to try for each n, p, q combo
     :param solve_once: True includes single solves in batch runs, False does not.
-    :param act_tols: Tolerances to use on deciding whether an inactive constraint
-    remains in the model
     :param min_search_proportions: list of smallest proportion of available cuts
     to search for deepest cuts to add to the model when solving iteratively
     :param threshold_proportions: list of proportions of infeasible cuts one cut
@@ -36,9 +35,11 @@ def run_experiments(ns, ps, qs, cut_proportions=None, numbers_of_cuts=None,
     assert numbers_of_cuts or cut_proportions, 'at least one'
     numbers_of_cuts = numbers_of_cuts or []
     cut_proportions = cut_proportions or []
-    act_tols = act_tols or [None]
     min_search_proportions = min_search_proportions or [1]
     threshold_proportions = threshold_proportions or []
+    remove_constraint_list = remove_constraint_list or [False]
+    zero_slack_likelihoods = zero_slack_likelihoods or [0]
+    assert False not in remove_constraint_list or 0 in zero_slack_likelihoods
 
     cuts_possible = {n: len(create_constraint_indices(range(n))) for n in ns}
 
@@ -69,27 +70,35 @@ def run_experiments(ns, ps, qs, cut_proportions=None, numbers_of_cuts=None,
             pth = os.path.join(profile_fldr, base + f'_once_id={i}_run_time.prof')
             mb.solve_once(method='auto', run_time_profile_file=pth)
 
-        # don't test combinations that would just rerun using the whole set of unadded cuts
-        # make sure these still print out correctly
-        for act_tol in act_tols:
-
-            for min_search_proportion in min_search_proportions:
-                if cut_size >= min_search_proportion * cuts_possible[mb.n]:
+        # continues avoid combinations that reduce to a previously run set
+        for remove_constraints in remove_constraint_list:
+            for zero_slack_likelihood in zero_slack_likelihoods:
+                if not remove_constraints and zero_slack_likelihood:
                     continue
-                ext = f'_at={act_tol}_msp={min_search_proportion}_id={i}_run_time.prof'
-                profile_pth = os.path.join(profile_fldr, base + ext)
-                mb.solve_iteratively(warm_start=True, method='auto',
-                                     min_search_proportion=min_search_proportion,
-                                     act_tol=act_tol, run_time_profile_file=profile_pth)
 
-            for threshold_proportion in threshold_proportions:
-                if cut_size >= (1 - threshold_proportion) * cuts_possible[mb.n]:
-                    continue
-                ext = f'_at={act_tol}_tp={threshold_proportion}_id={i}_run_time.prof'
-                profile_pth = os.path.join(profile_fldr, base + ext)
-                mb.solve_iteratively(warm_start=True, method='auto',
-                                     threshold_proportion=threshold_proportion,
-                                     act_tol=act_tol, run_time_profile_file=profile_pth)
+                for min_search_proportion in min_search_proportions:
+                    if cut_size >= min_search_proportion * cuts_possible[mb.n]:
+                        continue
+                    ext = f'msp={min_search_proportion}_rc={remove_constraints}_'\
+                          f'zsl={zero_slack_likelihood}_id={i}_run_time.prof'
+                    profile_pth = os.path.join(profile_fldr, base + ext)
+                    mb.solve_iteratively(warm_start=True, method='auto',
+                                         min_search_proportion=min_search_proportion,
+                                         remove_constraints=remove_constraints,
+                                         zero_slack_likelihood=zero_slack_likelihood,
+                                         run_time_profile_file=profile_pth)
+
+                for threshold_proportion in threshold_proportions:
+                    if cut_size >= (1 - threshold_proportion) * cuts_possible[mb.n]:
+                        continue
+                    ext = f'tp={threshold_proportion}_rc={remove_constraints}_'\
+                          f'zsl={zero_slack_likelihood}_id={i}_run_time.prof'
+                    profile_pth = os.path.join(profile_fldr, base + ext)
+                    mb.solve_iteratively(warm_start=True, method='auto',
+                                         threshold_proportion=threshold_proportion,
+                                         remove_constraints=remove_constraints,
+                                         zero_slack_likelihood=zero_slack_likelihood,
+                                         run_time_profile_file=profile_pth)
 
         solution_schema.csv.write_directory(mb.data, os.path.join(fldr, str(i)),
                                             allow_overwrite=True)
@@ -102,9 +111,10 @@ if __name__ == '__main__':
         'qs': [.2],
         'numbers_of_cuts': [1000],
         'solve_once': False,
-        'act_tols': [None, .125, .1, .075, .05, .01, .001, .0001, .00001],
         'min_search_proportions': [1],
-        'repeats': 5,
+        'remove_constraint_list': [False, True],
+        'zero_slack_likelihoods': [0, .1, .3],
+        'repeats': 50,
         'fldr': sys.argv[1],
     }
     run_experiments(**kwargs)

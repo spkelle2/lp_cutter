@@ -1,0 +1,11 @@
+solve_id,solve_type,method,warm_start,min_search_proportion,threshold_proportion,remove_constraints,sub_solve_id,n,p,q,cut_type,cut_value,cuts_sought,cuts_added,cuts_removed,search_proportion_used,current_threshold,variables,constraints,cpu_time
+16,iterative,auto,warm,1,,True,0,20,0.5,0.2,fixed,1000,100,100,0,1,,190,101,0.0018642639999999489
+16,iterative,auto,warm,1,,True,1,20,0.5,0.2,fixed,1000,1000,545,100,1,,190,546,0.009726534000000342
+16,iterative,auto,warm,1,,True,2,20,0.5,0.2,fixed,1000,1000,491,448,1,,190,589,0.017987954000000528
+16,iterative,auto,warm,1,,True,3,20,0.5,0.2,fixed,1000,1000,111,480,1,,190,220,0.005952151000000683
+16,iterative,auto,warm,1,,True,4,20,0.5,0.2,fixed,1000,1000,799,102,1,,190,917,0.023210419000001536
+16,iterative,auto,warm,1,,True,5,20,0.5,0.2,fixed,1000,1000,110,634,1,,190,393,0.01693210500000042
+16,iterative,auto,warm,1,,True,6,20,0.5,0.2,fixed,1000,1000,734,235,1,,190,892,0.05224685000000129
+16,iterative,auto,warm,1,,True,7,20,0.5,0.2,fixed,1000,1000,9,600,1,,190,301,0.022528542999999956
+16,iterative,auto,warm,1,,True,8,20,0.5,0.2,fixed,1000,1000,51,30,1,,190,322,0.023202340999999294
+16,iterative,auto,warm,1,,True,9,20,0.5,0.2,fixed,1000,1000,20,43,1,,190,299,0.0016727129999996038

@@ -1,0 +1,10 @@
+#PBS -N benchmark_20
+#PBS -e /home/sek519/lp_cutter/benchmark_20.err
+#PBS -o /home/sek519/lp_cutter/benchmark_20.out
+#PBS -l ncpus=4,mem=20gb,vmem=30gb
+#PBS -q medium
+
+cd /home/sek519/lp_cutter
+source /home/sek519/miniconda/bin/activate
+conda activate lp_cutter
+python runner.py benchmark_20 20

@@ -1,0 +1,28 @@
+         27238159 function calls in 2796.811 seconds
+
+   Ordered by: internal time
+   List reduced from 55 to 20 due to restriction <20>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+       19 2698.198  142.010 2698.202  142.011 min_bisection.py:303(_optimize)
+ 27017606   47.216    0.000   48.692    0.000 min_bisection.py:358(_get_cut_depth)
+       19   37.896    1.995   86.588    4.557 min_bisection.py:420(_recalibrate_cut_depths_by_search_proportion)
+        1    4.855    4.855    4.855    4.855 min_bisection.py:67(<setcomp>)
+       19    2.915    0.153    2.915    0.153 {built-in method builtins.sorted}
+    97468    1.476    0.000    1.476    0.000 min_bisection.py:394(_get_vals)
+    17354    1.329    0.000    1.389    0.000 min_bisection.py:236(_add_triangle_inequality)
+       19    1.089    0.057   90.592    4.768 min_bisection.py:443(_find_most_violated_constraints)
+     8386    0.724    0.000    0.724    0.000 min_bisection.py:229(<genexpr>)
+        1    0.676    0.676    0.676    0.676 min_bisection.py:225(<dictcomp>)
+        1    0.222    0.222    0.222    0.222 random.py:286(sample)
+        1    0.079    0.079 2796.811 2796.811 min_bisection.py:500(solve_iteratively)
+        1    0.025    0.025    6.305    6.305 min_bisection.py:163(_instantiate_model)
+    34714    0.024    0.000    0.024    0.000 {built-in method _abc._abc_instancecheck}
+        2    0.022    0.011    0.749    0.375 {gurobipy.gurobipy.quicksum}
+       19    0.022    0.001 2790.183  146.852 min_bisection.py:486(_iterate)
+    17354    0.019    0.000    0.019    0.000 {method 'remove' of 'set' objects}
+    34714    0.017    0.000    0.041    0.000 abc.py:137(__instancecheck__)
+     8386    0.004    0.000    0.004    0.000 min_bisection.py:233(<genexpr>)
+       19    0.001    0.000    0.002    0.000 utils.py:855(__init__)
+
+
