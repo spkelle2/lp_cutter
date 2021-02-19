@@ -366,7 +366,9 @@ class MinBisect:
         for ((i, j, k), t) in list(self.c):
             self._add_triangle_inequality(i, j, k, t)
 
+        print('solving once now')
         self._optimize()
+        print('done solving once')
         assert self.mdl.status == gu.GRB.OPTIMAL, 'once solve should have solution'
 
     def _get_cut_depth(self, i, j, k, t):
