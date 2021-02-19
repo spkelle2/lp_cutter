@@ -1,7 +1,7 @@
 #PBS -N benchmark_70
 #PBS -e /home/sek519/lp_cutter/benchmark_70.err
 #PBS -o /home/sek519/lp_cutter/benchmark_70.out
-#PBS -l ncpus=4,mem=20gb,vmem=30gb
+#PBS -l ncpus=4,mem=4gb,vmem=6gb
 #PBS -q long
 
 cd /home/sek519/lp_cutter
