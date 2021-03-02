@@ -5,7 +5,7 @@ def make_pbs_files(ns, base_name):
 #PBS -e /home/sek519/lp_cutter/{base_name}_{n}.err
 #PBS -o /home/sek519/lp_cutter/{base_name}_{n}.out
 #PBS -l ncpus=4,mem=4gb,vmem=6gb
-#PBS -q {'verylong' if n > 80 else 'long' if n > 50 else 'medium'}
+#PBS -q {'verylong' if n > 100 else 'long' if n > 50 else 'medium'}
 
 cd /home/sek519/lp_cutter
 source /home/sek519/miniconda/bin/activate
@@ -17,4 +17,4 @@ python runner.py {base_name}_{n} {n}"""
 
 
 if __name__ == '__main__':
-    make_pbs_files(range(90, 130, 10), 'sample')
+    make_pbs_files(range(10, 160, 10), 'sample')
