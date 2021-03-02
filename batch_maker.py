@@ -18,3 +18,4 @@ python runner.py {base_name}_{n} {n}"""
 
 if __name__ == '__main__':
     make_pbs_files(range(10, 160, 10), 'dual_profile')
+
