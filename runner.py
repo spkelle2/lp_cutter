@@ -110,7 +110,7 @@ if __name__ == '__main__':
         'ps': [.5],
         'qs': [.2],
         'numbers_of_cuts': [1000],
-        'solve_once': True,
+        'solve_once': False,  # True,
         'min_search_proportions': [1],
         'remove_constraint_list': [False, True],
         'zero_slack_likelihoods': [0, .1, .3],

@@ -15,13 +15,15 @@ solution_schema = TicDatFactory(
                ['n', 'p', 'q', 'cut_type', 'cut_value', 'cuts_sought',
                 'cuts_added', 'cuts_removed', 'search_proportion_used',
                 'current_threshold', 'variables',
-                'constraints', 'cpu_time']],
+                'constraints', 'cpu_time', 'dual_0_constraints', 'dual_0_with_slack',
+                'dual_0_no_slack']],
     summary_stats=[['solve_id', 'solve_type', 'method', 'warm_start',
                     'min_search_proportion', 'threshold_proportion', 'remove_constraints',
                     'zero_slack_likelihood'],
                    ['n', 'p', 'q', 'cut_type', 'cut_value', 'max_variables',
                     'max_constraints', 'total_cpu_time', 'gurobi_cpu_time',
-                    'non_gurobi_cpu_time', 'objective_value']]
+                    'non_gurobi_cpu_time', 'objective_value', 'dual_0_constraints',
+                    'dual_0_with_slack', 'dual_0_no_slack']]
 )
 
 
@@ -152,6 +154,9 @@ class MinBisect:
         self.remove_constraints = False
         self.removed_nonslack = None
         self.zero_slack_likelihood = None
+        self.dual_0_constraints = None
+        self.dual_0_with_slack = None
+        self.dual_0_no_slack = None
 
 
     @property
@@ -163,6 +168,11 @@ class MinBisect:
     @property
     def warm_str(self):
         return 'warm' if self.warm_start else 'cold'
+
+    def _reset_dual_0_counters(self):
+        self.dual_0_constraints = 0
+        self.dual_0_with_slack = 0
+        self.dual_0_no_slack = 0
 
     def _instantiate_model(self, solve_type='iterative', warm_start=True,
                            method='dual', min_search_proportion=1,
@@ -224,6 +234,7 @@ class MinBisect:
         self.current_threshold = None
         self.keep_iterating = True
         self.removed_nonslack = set()
+        self._reset_dual_0_counters()
 
         # model
         self.mdl = gu.Model("min bisection")
@@ -284,15 +295,22 @@ class MinBisect:
             solve_start = time.process_time()
             retval = func(self, *args, **kwargs)
             total_cpu_time = time.process_time() - solve_start
-            # sum over sub solve indices for this combination of solve
-            # solve_id, solve_type, method, warm_start, sub_solve_id
-            gurobi_cpu_time = sum(
-                d['cpu_time'] for (si, st, m, ws, msp, tp, rc, zsl, ssi), d in
-                self.data.run_stats.items() if self.solve_type == st and
-                self.method == m and self.warm_str == ws and
-                self.min_search_proportion == msp and self.threshold_proportion == tp
-                and self.remove_constraints == rc and self.zero_slack_likelihood == zsl
-            )
+
+            def sum_column(column):
+                """ sum run stat column over sub solve indices for this pk combination
+
+                :param column: which column to take a sum of
+                :return:
+                """
+                return sum(
+                    d[column] for (si, st, m, ws, msp, tp, rc, zsl, ssi), d in
+                    self.data.run_stats.items() if self.solve_type == st and
+                    self.method == m and self.warm_str == ws and
+                    self.min_search_proportion == msp and self.threshold_proportion == tp
+                    and self.remove_constraints == rc and self.zero_slack_likelihood == zsl
+                )
+
+            gurobi_cpu_time = sum_column('cpu_time')
             self.data.summary_stats[self.solve_id, self.solve_type, self.method,
                                     self.warm_str, self.min_search_proportion,
                                     self.threshold_proportion, self.remove_constraints,
@@ -307,7 +325,10 @@ class MinBisect:
                 'total_cpu_time': total_cpu_time,
                 'gurobi_cpu_time': gurobi_cpu_time,
                 'non_gurobi_cpu_time': total_cpu_time - gurobi_cpu_time,
-                'objective_value': self.mdl.ObjVal
+                'objective_value': self.mdl.ObjVal,
+                'dual_0_constraints': sum_column('dual_0_constraints'),
+                'dual_0_with_slack': sum_column('dual_0_with_slack'),
+                'dual_0_no_slack': sum_column('dual_0_no_slack')
             }
             return retval
 
@@ -346,7 +367,10 @@ class MinBisect:
             'current_threshold': self.current_threshold,
             'constraints': self.mdl.NumConstrs,
             'variables': self.mdl.NumVars,
-            'cpu_time': sub_solve_cpu_time
+            'cpu_time': sub_solve_cpu_time,
+            'dual_0_constraints': self.dual_0_constraints,
+            'dual_0_with_slack': self.dual_0_with_slack,
+            'dual_0_no_slack': self.dual_0_no_slack
         }
 
     @_summary_profile
@@ -366,9 +390,7 @@ class MinBisect:
         for ((i, j, k), t) in list(self.c):
             self._add_triangle_inequality(i, j, k, t)
 
-        print('solving once now')
         self._optimize()
-        print('done solving once')
         assert self.mdl.status == gu.GRB.OPTIMAL, 'once solve should have solution'
 
     def _get_cut_depth(self, i, j, k, t):
@@ -499,11 +521,16 @@ class MinBisect:
                 continue
             i, j, k, t = [int(idx) for idx in
                           self.pattern.match(constr.ConstrName).groups()]
+            self.dual_0_constraints += 1
             dual_0_removable = ((i, j, k), t) not in self.removed_nonslack and \
                 np.random.uniform() < self.zero_slack_likelihood
+            if constr.slack <= self.tolerance:
+                self.dual_0_no_slack += 1
             # remove if there is slack or if this is a zero dual that can go
             if constr.slack > self.tolerance or dual_0_removable:
-                if constr.slack <= self.tolerance and dual_0_removable:
+                if constr.slack > self.tolerance:
+                    self.dual_0_with_slack += 1
+                else:
                     self.removed_nonslack.add(((i, j, k), t))
                 removed.append(((i, j, k), t))
                 self.mdl.remove(constr)
@@ -517,6 +544,7 @@ class MinBisect:
 
         :return:
         """
+        self._reset_dual_0_counters()
         if self.remove_constraints:
             self.removed = self._remove_constraints()
         self._find_most_violated_constraints()
