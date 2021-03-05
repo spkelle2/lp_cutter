@@ -1,0 +1,13 @@
+solve_id,solve_type,method,warm_start,min_search_proportion,threshold_proportion,remove_constraints,zero_slack_likelihood,sub_solve_id,n,p,q,cut_type,cut_value,cuts_sought,cuts_added,cuts_removed,search_proportion_used,current_threshold,variables,constraints,cpu_time,dual_0_constraints,dual_0_with_slack,dual_0_no_slack
+37,iterative,auto,warm,1,,False,0,0,20,0.5,0.2,fixed,1000,100,100,0,1,,190,101,0.0019112079999956677,0,0,0
+37,iterative,auto,warm,1,,False,0,1,20,0.5,0.2,fixed,1000,1000,552,0,1,,190,653,0.02269300900000104,0,0,0
+37,iterative,auto,warm,1,,False,0,2,20,0.5,0.2,fixed,1000,1000,234,0,1,,190,887,0.0028285389999993527,0,0,0
+37,iterative,auto,warm,1,,True,0,0,20,0.5,0.2,fixed,1000,100,100,0,1,,190,101,0.0020866130000030125,0,0,0
+37,iterative,auto,warm,1,,True,0,1,20,0.5,0.2,fixed,1000,1000,594,53,1,,190,642,0.01398365100000376,100,53,47
+37,iterative,auto,warm,1,,True,0,2,20,0.5,0.2,fixed,1000,1000,167,146,1,,190,663,0.003654939000000468,540,146,394
+37,iterative,auto,warm,1,,True,0.1,0,20,0.5,0.2,fixed,1000,100,100,0,1,,190,101,0.0019057890000055977,0,0,0
+37,iterative,auto,warm,1,,True,0.1,1,20,0.5,0.2,fixed,1000,1000,570,58,1,,190,613,0.015659634000002143,100,54,46
+37,iterative,auto,warm,1,,True,0.1,2,20,0.5,0.2,fixed,1000,1000,404,312,1,,190,705,0.01015529000000015,502,293,209
+37,iterative,auto,warm,1,,True,0.3,0,20,0.5,0.2,fixed,1000,100,100,62,1,,190,101,0.0018864480000004846,0,0,0
+37,iterative,auto,warm,1,,True,0.3,1,20,0.5,0.2,fixed,1000,1000,550,58,1,,190,593,0.009588245999999856,100,41,59
+37,iterative,auto,warm,1,,True,0.3,2,20,0.5,0.2,fixed,1000,1000,264,262,1,,190,595,0.010941658999996662,491,169,322

@@ -1,0 +1,17 @@
+solve_id,solve_type,method,warm_start,min_search_proportion,threshold_proportion,remove_constraints,zero_slack_likelihood,sub_solve_id,n,p,q,cut_type,cut_value,cuts_sought,cuts_added,cuts_removed,search_proportion_used,current_threshold,variables,constraints,cpu_time,dual_0_constraints,dual_0_with_slack,dual_0_no_slack
+29,iterative,auto,warm,1,,False,0,0,30,0.5,0.2,fixed,1000,100,100,0,1,,435,101,0.0028689770000198678,0,0,0
+29,iterative,auto,warm,1,,False,0,1,30,0.5,0.2,fixed,1000,1000,1000,0,1,,435,1101,0.10213638399997649,0,0,0
+29,iterative,auto,warm,1,,False,0,2,30,0.5,0.2,fixed,1000,1000,1000,0,1,,435,2101,0.2122936359999983,0,0,0
+29,iterative,auto,warm,1,,True,0,0,30,0.5,0.2,fixed,1000,100,100,0,1,,435,101,0.0028366049999988263,0,0,0
+29,iterative,auto,warm,1,,True,0,1,30,0.5,0.2,fixed,1000,1000,1000,40,1,,435,1061,0.08356863800000269,100,40,60
+29,iterative,auto,warm,1,,True,0,2,30,0.5,0.2,fixed,1000,1000,1000,733,1,,435,1328,0.16660202299999582,751,733,18
+29,iterative,auto,warm,1,,True,0,3,30,0.5,0.2,fixed,1000,1000,54,58,1,,435,1324,0.004386104000019486,940,58,882
+29,iterative,auto,warm,1,,True,0.1,0,30,0.5,0.2,fixed,1000,100,100,0,1,,435,101,0.0028524539999921217,0,0,0
+29,iterative,auto,warm,1,,True,0.1,1,30,0.5,0.2,fixed,1000,1000,1000,54,1,,435,1047,0.08264883600000417,100,48,52
+29,iterative,auto,warm,1,,True,0.1,2,30,0.5,0.2,fixed,1000,1000,1000,723,1,,435,1324,0.1482377429999815,746,723,23
+29,iterative,auto,warm,1,,True,0.1,3,30,0.5,0.2,fixed,1000,1000,54,170,1,,435,1208,0.004418829999991658,929,67,862
+29,iterative,auto,warm,1,,True,0.3,0,30,0.5,0.2,fixed,1000,100,100,72,1,,435,101,0.002876060999994934,0,0,0
+29,iterative,auto,warm,1,,True,0.3,1,30,0.5,0.2,fixed,1000,1000,1000,62,1,,435,1039,0.09554527999998186,100,46,54
+29,iterative,auto,warm,1,,True,0.3,2,30,0.5,0.2,fixed,1000,1000,1000,719,1,,435,1320,0.254070224000003,735,710,25
+29,iterative,auto,warm,1,,True,0.3,3,30,0.5,0.2,fixed,1000,1000,1000,908,1,,435,1412,0.13648705500000347,916,903,13
+29,iterative,auto,warm,1,,True,0.3,4,30,0.5,0.2,fixed,1000,1000,104,337,1,,435,1179,0.12341640699997924,1023,54,969

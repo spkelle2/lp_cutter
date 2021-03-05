@@ -1,0 +1,17 @@
+solve_id,solve_type,method,warm_start,min_search_proportion,threshold_proportion,remove_constraints,zero_slack_likelihood,sub_solve_id,n,p,q,cut_type,cut_value,cuts_sought,cuts_added,cuts_removed,search_proportion_used,current_threshold,variables,constraints,cpu_time,dual_0_constraints,dual_0_with_slack,dual_0_no_slack
+9,iterative,auto,warm,1,,False,0,0,20,0.5,0.2,fixed,1000,100,100,0,1,,190,101,0.002036319999998426,0,0,0
+9,iterative,auto,warm,1,,False,0,1,20,0.5,0.2,fixed,1000,1000,538,0,1,,190,639,0.03849614300000326,0,0,0
+9,iterative,auto,warm,1,,False,0,2,20,0.5,0.2,fixed,1000,1000,283,0,1,,190,922,0.02358335199999928,0,0,0
+9,iterative,auto,warm,1,,False,0,3,20,0.5,0.2,fixed,1000,1000,7,0,1,,190,929,0.0018534079999987796,0,0,0
+9,iterative,auto,warm,1,,True,0,0,20,0.5,0.2,fixed,1000,100,100,0,1,,190,101,0.0021943259999979148,0,0,0
+9,iterative,auto,warm,1,,True,0,1,20,0.5,0.2,fixed,1000,1000,538,44,1,,190,595,0.033376944000000464,100,44,56
+9,iterative,auto,warm,1,,True,0,2,20,0.5,0.2,fixed,1000,1000,270,243,1,,190,622,0.027443072000000512,459,243,216
+9,iterative,auto,warm,1,,True,0,3,20,0.5,0.2,fixed,1000,1000,201,306,1,,190,517,0.0095078349999973,443,306,137
+9,iterative,auto,warm,1,,True,0,4,20,0.5,0.2,fixed,1000,1000,141,169,1,,190,489,0.004386851999999664,332,169,163
+9,iterative,auto,warm,1,,True,0.1,0,20,0.5,0.2,fixed,1000,100,100,117,1,,190,101,0.0018257780000006107,0,0,0
+9,iterative,auto,warm,1,,True,0.1,1,20,0.5,0.2,fixed,1000,1000,530,57,1,,190,574,0.03311178699999928,100,52,48
+9,iterative,auto,warm,1,,True,0.1,2,20,0.5,0.2,fixed,1000,1000,324,294,1,,190,604,0.02951867600000213,422,276,146
+9,iterative,auto,warm,1,,True,0.3,0,20,0.5,0.2,fixed,1000,100,100,231,1,,190,101,0.002126162999999792,0,0,0
+9,iterative,auto,warm,1,,True,0.3,1,20,0.5,0.2,fixed,1000,1000,528,62,1,,190,567,0.03246805800000274,100,44,56
+9,iterative,auto,warm,1,,True,0.3,2,20,0.5,0.2,fixed,1000,1000,530,383,1,,190,714,0.04870615900000175,421,362,59
+9,iterative,auto,warm,1,,True,0.3,3,20,0.5,0.2,fixed,1000,1000,285,518,1,,190,481,0.006446322000002169,527,517,10

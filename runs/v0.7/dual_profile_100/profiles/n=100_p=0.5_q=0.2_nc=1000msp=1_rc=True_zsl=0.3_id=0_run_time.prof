@@ -1,0 +1,28 @@
+         31455196 function calls in 1893.830 seconds
+
+   Ordered by: internal time
+   List reduced from 62 to 20 due to restriction <20>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+       48 1787.037   37.230 1787.047   37.230 min_bisection.py:337(_optimize)
+ 30807541   51.099    0.000   54.531    0.000 min_bisection.py:396(_get_cut_depth)
+       48   37.412    0.779   91.943    1.915 min_bisection.py:458(_recalibrate_cut_depths_by_search_proportion)
+       48    4.126    0.086    4.800    0.100 min_bisection.py:511(_remove_constraints)
+   144099    3.432    0.000    3.432    0.000 min_bisection.py:432(_get_vals)
+       48    3.326    0.069    3.326    0.069 {built-in method builtins.sorted}
+        1    2.249    2.249    2.249    2.249 min_bisection.py:71(<setcomp>)
+    42428    1.520    0.000    1.666    0.000 min_bisection.py:259(_add_triangle_inequality)
+       48    1.343    0.028   96.612    2.013 min_bisection.py:481(_find_most_violated_constraints)
+        1    0.453    0.453    0.453    0.453 min_bisection.py:248(<dictcomp>)
+    47051    0.420    0.000    0.420    0.000 {method 'uniform' of 'numpy.random.mtrand.RandomState' objects}
+     4951    0.394    0.000    0.394    0.000 min_bisection.py:252(<genexpr>)
+        1    0.378    0.378    3.490    3.490 min_bisection.py:177(_instantiate_model)
+    48307    0.122    0.000    0.122    0.000 min_bisection.py:522(<listcomp>)
+        1    0.110    0.110    0.110    0.110 random.py:315(sample)
+    48307    0.098    0.000    0.098    0.000 {method 'match' of 're.Pattern' objects}
+    42428    0.054    0.000    0.054    0.000 {method 'remove' of 'set' objects}
+       48    0.051    0.001 1890.182   39.379 min_bisection.py:539(_iterate)
+    84862    0.048    0.000    0.091    0.000 abc.py:96(__instancecheck__)
+    84862    0.043    0.000    0.043    0.000 {built-in method _abc._abc_instancecheck}
+
+
