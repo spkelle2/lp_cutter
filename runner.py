@@ -61,6 +61,7 @@ def run_experiments(ns, ps, qs, cut_proportions=None, numbers_of_cuts=None,
         combinations.sort(key=lambda x: x['n'])
 
     for i, combo in enumerate(combinations):
+        i += start_index
         print(f'running test {i+1} of {len(combinations)}')
         i += start_index
         mb = MinBisect(**combo, solve_id=i)
