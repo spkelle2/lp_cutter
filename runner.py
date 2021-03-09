@@ -13,7 +13,8 @@ from min_bisection import MinBisect, solution_schema, create_constraint_indices
 def run_experiments(ns, ps, qs, cut_proportions=None, numbers_of_cuts=None,
                     solve_once=True, min_search_proportions=None,
                     threshold_proportions=None, remove_constraint_list=None,
-                    zero_slack_likelihoods=None, repeats=1, fldr='run_results'):
+                    zero_slack_likelihoods=None, repeats=1, fldr='run_results',
+                    start_index=0, sorted=True):
     """Solve all at once and solve iteratively the min bisection problem
     <repeats> times for each combo of n, p, q, and cut_proportion/number_of_cuts.
 
@@ -56,9 +57,11 @@ def run_experiments(ns, ps, qs, cut_proportions=None, numbers_of_cuts=None,
         (n, p, q, number_of_cuts) in product(ns, ps, qs, numbers_of_cuts)
     ]
     combinations *= repeats
-    combinations.sort(key=lambda x: x['n'])
+    if sorted:
+        combinations.sort(key=lambda x: x['n'])
 
     for i, combo in enumerate(combinations):
+        i += start_index
         print(f'running test {i+1} of {len(combinations)}')
         mb = MinBisect(**combo, solve_id=i)
         cut_size = mb.cut_value if mb.cut_type == 'fixed' else \
@@ -110,11 +113,13 @@ if __name__ == '__main__':
         'ps': [.5],
         'qs': [.2],
         'numbers_of_cuts': [1000],
-        'solve_once': False,  # True,
+        'solve_once': True,
         'min_search_proportions': [1],
         'remove_constraint_list': [False, True],
-        'zero_slack_likelihoods': [0, .1, .3],
-        'repeats': 50,
+        'zero_slack_likelihoods': [0],
+        'repeats': 25,
         'fldr': sys.argv[1],
+        'start_index': 0,
+        'sorted': False
     }
     run_experiments(**kwargs)
