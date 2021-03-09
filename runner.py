@@ -118,9 +118,9 @@ if __name__ == '__main__':
         'min_search_proportions': [1],
         'remove_constraint_list': [False, True],
         'zero_slack_likelihoods': [0],
-        'repeats': 25,
+        'repeats': 10,
         'fldr': sys.argv[1],
-        'start_index': 25,
+        'start_index': 0,
         'sorted': False
     }
     run_experiments(**kwargs)
