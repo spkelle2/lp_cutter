@@ -1,0 +1,5 @@
+solve_id,solve_type,method,warm_start,min_search_proportion,threshold_proportion,remove_constraints,zero_slack_likelihood,n,p,q,cut_type,cut_value,max_variables,max_constraints,total_cpu_time,gurobi_cpu_time,non_gurobi_cpu_time,objective_value,dual_0_constraints,dual_0_with_slack,dual_0_no_slack
+15,iterative,auto,warm,1,,False,0,80,0.5,0.2,fixed,1000,3160,10236,189.52142745499987,177.46914319100142,12.052284263998445,331.9487375669467,0,0,0
+15,iterative,auto,warm,1,,True,0,80,0.5,0.2,fixed,1000,3160,4158,256.0092123129998,158.31271674099662,97.69649557200319,331.94873756694705,96131,92943,3188
+15,iterative,auto,warm,1,,True,0.1,80,0.5,0.2,fixed,1000,3160,4159,820.6413881829994,723.0503167579936,97.5910714250058,331.9487375669475,93958,90643,3315
+15,iterative,auto,warm,1,,True,0.3,80,0.5,0.2,fixed,1000,3160,4160,1357.6827050800002,1258.2077745120023,99.47493056799794,331.94873756694784,94500,90927,3573

@@ -1,0 +1,10 @@
+#PBS -N dual_profile_60
+#PBS -e /home/sek519/lp_cutter/dual_profile_60.err
+#PBS -o /home/sek519/lp_cutter/dual_profile_60.out
+#PBS -l ncpus=4,mem=4gb,vmem=6gb
+#PBS -q long
+
+cd /home/sek519/lp_cutter
+source /home/sek519/miniconda/bin/activate
+conda activate lp_cutter
+python runner.py dual_profile_60 60

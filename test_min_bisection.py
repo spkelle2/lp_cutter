@@ -146,6 +146,15 @@ class TestMinBisection(unittest.TestCase):
         mb.warm_start = False
         self.assertTrue(mb.file_combo == 'iterative_auto_cold_1_None')
 
+    def test_reset_dual_0_counters(self):
+        mb = MinBisect(8, .5, .1, number_of_cuts=10)
+        mb.dual_0_constraints = 52
+        mb.dual_0_with_slack = 24
+        mb.dual_0_no_slack = 28
+        mb._reset_dual_0_counters()
+        self.assertTrue(mb.dual_0_constraints == mb.dual_0_with_slack ==
+                        mb.dual_0_no_slack == 0)
+
     def test_instantiate_model(self):
         indices = range(8)
         mb = MinBisect(8, .5, .1, .1)
@@ -225,6 +234,11 @@ class TestMinBisection(unittest.TestCase):
         self.assertTrue(mb.keep_iterating)
         self.assertTrue(mb.remove_constraints)
         self.assertTrue(mb.zero_slack_likelihood == .2)
+
+        # reset dual 0 counters
+        with patch.object(mb, '_reset_dual_0_counters') as rdc:
+            mb._instantiate_model()
+            self.assertTrue(rdc.call_count == 1)
 
     def test_instantiate_model_passes_asserts(self):
         mb = MinBisect(8, .5, .1, number_of_cuts=100)
@@ -339,6 +353,7 @@ class TestMinBisection(unittest.TestCase):
         self.assertTrue(data['max_variables'] == max_variables)
         self.assertTrue(data['total_cpu_time'] >= data['gurobi_cpu_time'])
         self.assertTrue(data['total_cpu_time'] >= data['non_gurobi_cpu_time'])
+        # if gurobi cpu time is right, so are the other sums
         gurobi_cpu_time = sum(
             d['cpu_time'] for (si, st, m, ws, msp, tp, rc, zsl, ssi), d in
             mb.data.run_stats.items() if st == 'iterative' and m == 'dual' and
@@ -348,6 +363,9 @@ class TestMinBisection(unittest.TestCase):
         self.assertTrue(data['total_cpu_time'] == data['gurobi_cpu_time'] + data['non_gurobi_cpu_time'])
         # compares different runs but they should all be same anyways
         self.assertTrue(isclose(data['objective_value'], mb.mdl.ObjVal, abs_tol=.0001))
+        self.assertTrue(data['dual_0_constraints'], "we should have some removed constraints")
+        self.assertTrue(data['dual_0_constraints'] == data['dual_0_with_slack']
+                        + data['dual_0_no_slack'])
 
         # make sure all time values > 0
         for f in mb.data.summary_stats.values():
@@ -428,6 +446,20 @@ class TestMinBisection(unittest.TestCase):
         # and total cuts should equal last total + added - removed
         self.assertTrue(data['constraints'] ==
                         pc + data['cuts_added'] - data['cuts_removed'])
+
+    def test_optimize_properly_profiles_dual_constraints(self):
+        mb = MinBisect(20, .5, .1, number_of_cuts=100)
+        mb._instantiate_model(remove_constraints=True)
+        for ((i, j, k), t) in random.sample(mb.c, 100):
+            mb._add_triangle_inequality(i, j, k, t)
+        mb._optimize()
+        mb._iterate()
+        self.assertTrue(mb.dual_0_constraints > 0)  # make sure we had some
+        data = mb.data.run_stats[0, 'iterative', 'dual', 'warm', 1, None, True, 0, 1]
+        # already tested they add up - just need to test they're copied over
+        self.assertTrue(data['dual_0_constraints'] == mb.dual_0_constraints)
+        self.assertTrue(data['dual_0_with_slack'] == mb.dual_0_with_slack)
+        self.assertTrue(data['dual_0_no_slack'] == mb.dual_0_no_slack)
 
     def test_optimize_cut_math_right(self):
         mb = MinBisect(8, .5, .1, number_of_cuts=10)
@@ -843,6 +875,33 @@ class TestMinBisection(unittest.TestCase):
                                 'constraint must have slack or not have been '
                                 'removed for nonslack before')
 
+    def test_remove_constraints_profiles_dual_0s(self):
+        mb = MinBisect(20, .5, .1, number_of_cuts=100)
+        mb._instantiate_model(remove_constraints=True, zero_slack_likelihood=.2)
+        for ((i, j, k), t) in random.sample(mb.c, 100):
+            mb._add_triangle_inequality(i, j, k, t)
+        mb.mdl.optimize()
+        mb._find_most_violated_constraints()
+        for ((i, j, k), t) in mb.inf:
+            mb._add_triangle_inequality(i, j, k, t)
+        mb._optimize()
+        removed = mb._remove_constraints()
+        self.assertTrue(removed)
+        dual_0_constraints = 0
+        dual_0_no_slack = 0
+        dual_0_with_slack = 0
+        for constr in mb.mdl.getConstrs():
+            if constr.pi > -1e-10 and constr.ConstrName != 'equal_partitions':
+                dual_0_constraints += 1
+                if constr.slack > mb.tolerance:
+                    dual_0_with_slack += 1
+                else:
+                    dual_0_no_slack += 1
+        self.assertTrue(dual_0_constraints == mb.dual_0_constraints)
+        self.assertTrue(dual_0_no_slack == mb.dual_0_no_slack)
+        self.assertTrue(dual_0_with_slack == mb.dual_0_with_slack)
+        self.assertTrue(mb.dual_0_constraints == mb.dual_0_with_slack + mb.dual_0_no_slack)
+
     def test_iterate(self):
         mb = MinBisect(20, .5, .1, number_of_cuts=100)
         mb._instantiate_model(remove_constraints=True)
@@ -915,6 +974,17 @@ class TestMinBisection(unittest.TestCase):
             self.assertTrue(fmvc.call_count == 1)
             self.assertTrue(o.call_count == 1)
             self.assertTrue(rc.call_count == 0)
+
+    def test_iterate_resets_dual_0_counters(self):
+        mb = MinBisect(20, .5, .1, number_of_cuts=100)
+        mb._instantiate_model()
+        for ((i, j, k), t) in random.sample(mb.c, 100):
+            mb._add_triangle_inequality(i, j, k, t)
+        mb.mdl.optimize()
+        # reset dual 0 counters
+        with patch.object(mb, '_reset_dual_0_counters') as rdc:
+            mb._iterate()
+            self.assertTrue(rdc.call_count == 1)
 
     @patch('min_bisection.gu.Model.reset')
     def test_solve_iteratively_cold(self, reset_patch):
