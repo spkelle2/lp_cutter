@@ -9,7 +9,7 @@ in `environment.yml`. If you could use some reminders on how to create and start
 conda environments, [this](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file)
 is a good resource. If that looks like gibberish to you, contact Sean directly,
 and he'll help you get setup. Once you have the conda environment activated
-(or you IDE pointed at it), the following files will be of interest to you.
+(or your IDE pointed at it), the following files will be of interest to you.
 
 If you would like to contribute, please make a branch off of `dev` and be sure
 to augment the unit tests to account for your changes and that they all pass
@@ -37,6 +37,7 @@ and collecting their corresponding data.
 A jupyter notebook where run statistics are compiled and fed into graphs for
 comparison
 
-### job.pbs
-A template file that can be altered to kick off batch jobs (i.e. `runner.py`)
-on the coral servers at Lehigh.
+### batch_maker.py
+Creates `.pbs` files that can be used to run multiple instances of `runner.py`
+in parallel with torque on the coral server cluster. For more information on
+torque, check out [this resource](https://coral.ise.lehigh.edu/wiki/doku.php/tutorial:torque).
