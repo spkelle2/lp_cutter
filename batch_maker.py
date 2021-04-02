@@ -1,5 +1,13 @@
 
 def make_pbs_files(ns, base_name):
+    """ Creates a .pbs file for each n in ns that will launch the current state
+    of runner.py for the given value of n. Saves all run metadata in folder
+    <base_name>_<n>.
+
+    :param ns: the list of sizes of problem we want to run experiments for
+    :param base_name: where to save run meta data
+    :return:
+    """
     for n in ns:
         txt = f"""#PBS -N {base_name}_{n}
 #PBS -e /home/sek519/lp_cutter/{base_name}_{n}.err
